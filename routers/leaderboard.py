@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import text
 from typing import List
 from pydantic import BaseModel
-
-import models
+import crud
 from database import get_db
 
 router = APIRouter(prefix="/api/courses", tags=["Leaderboard"])
@@ -15,59 +14,37 @@ class LeaderboardEntry(BaseModel):
     points: int
     id: str
 
-    class Config:
-        from_attributes = True
-
 @router.get("/{course_id}/leaderboard", response_model=List[LeaderboardEntry])
 def get_course_leaderboard(course_id: str, db: Session = Depends(get_db)):
-    """
-    Returns a leaderboard for a specific course.
-    Points = (topic completions in this course * 10) + (quiz scores in this course * 5)
-    """
-    # Get all chapters for this course
-    chapters = db.query(models.Chapter).filter(models.Chapter.course_id == course_id).all()
-    chapter_ids = [ch.id for ch in chapters]
-
-    # Get all topics for these chapters
-    topics = db.query(models.Topic).filter(models.Topic.chapter_id.in_(chapter_ids)).all()
-    topic_ids = [t.id for t in topics]
-
-    # Get all students
-    students = db.query(models.User).filter(models.User.role == "student").all()
-
+    """Returns leaderboard for ENROLLED students only, ranked by topic completions + quiz scores."""
+    query = text("""
+        SELECT u.id, u.name, 
+        (
+            SELECT COUNT(tc.topic_id) * 10 FROM topic_completions tc 
+            JOIN topics t ON t.id = tc.topic_id
+            JOIN chapters ch ON ch.id = t.chapter_id
+            WHERE tc.user_id = u.id AND ch.course_id = :cid
+        ) + 
+        COALESCE(
+            (
+                SELECT SUM(qa.score) * 5 FROM quiz_attempts qa
+                JOIN quizzes q ON q.id = qa.quiz_id
+                WHERE qa.user_id = u.id 
+                AND EXISTS (
+                    SELECT 1 FROM topics t 
+                    JOIN chapters c ON c.id = t.chapter_id
+                    WHERE (t.id = q.topic_id OR c.id = q.chapter_id) AND c.course_id = :cid
+                )
+            ), 0
+        ) AS total_points
+        FROM users u
+        JOIN enrollments e ON e.user_id = u.id AND e.course_id = :cid AND e.status = 'approved'
+        WHERE u.role = 'student'
+        ORDER BY total_points DESC
+    """)
+    res = db.execute(query, {"cid": course_id}).fetchall()
+    
     entries = []
-    for student in students:
-        # Count topic completions in this course
-        completions = db.query(models.TopicCompletion).filter(
-            models.TopicCompletion.user_id == student.id,
-            models.TopicCompletion.topic_id.in_(topic_ids)
-        ).count()
-
-        # Count quiz attempt scores for quizzes in this course
-        quiz_ids = []
-        quizzes = db.query(models.Quiz).filter(
-            (models.Quiz.topic_id.in_(topic_ids)) | (models.Quiz.chapter_id.in_(chapter_ids))
-        ).all()
-        quiz_ids = [q.id for q in quizzes]
-
-        total_score = 0
-        if quiz_ids:
-            result = db.query(func.sum(models.QuizAttempt.score)).filter(
-                models.QuizAttempt.user_id == student.id,
-                models.QuizAttempt.quiz_id.in_(quiz_ids)
-            ).scalar()
-            total_score = result or 0
-
-        points = (completions * 10) + (total_score * 5)
-        entries.append({
-            "id": student.id,
-            "student": student.name,
-            "points": points
-        })
-
-    # Sort and rank
-    entries.sort(key=lambda x: x["points"], reverse=True)
-    for i, entry in enumerate(entries):
-        entry["rank"] = i + 1
-
+    for i, r in enumerate(res):
+        entries.append({"rank": i+1, "student": r.name, "points": r.total_points, "id": r.id})
     return entries

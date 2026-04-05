@@ -1,0 +1,4 @@
+def update_enrollment_role(db: Session, enrollment_id: str, role: str):
+    db.execute(text("UPDATE enrollments SET role=:r WHERE id=:id"), {"id": enrollment_id, "r": role})
+    db.commit()
+    return db.execute(text("SELECT * FROM enrollments WHERE id=:id"), {"id": enrollment_id}).fetchone()

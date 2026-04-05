@@ -1,91 +1,65 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import text
 import datetime
+import uuid
 
 import crud
 import schemas
-import models
 from database import get_db
 
 router = APIRouter(prefix="/api/profile", tags=["Profile"])
 
 @router.get("/{user_id}", response_model=schemas.User)
 def get_profile(user_id: str, db: Session = Depends(get_db)):
-    user = crud.get_user(db, user_id)
-    if not user:
+    user_data = crud.get_user(db, user_id=user_id)
+    if not user_data:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Calculate Stats
-    completed_topics = db.query(models.TopicCompletion).filter(models.TopicCompletion.user_id == user_id).count()
+    # Calculate stats
+    # topics
+    tc = db.execute(text("SELECT COUNT(*) FROM topic_completions WHERE user_id=:id"), {"id": user_id}).scalar()
+    # quizzes
+    qa = db.execute(text("SELECT COUNT(*), AVG(score*100.0/total) FROM quiz_attempts WHERE user_id=:id AND total > 0"), {"id": user_id}).fetchone()
+    # enrollments
+    en = db.execute(text("SELECT COUNT(*) FROM enrollments WHERE user_id=:id AND status='approved'"), {"id": user_id}).scalar()
     
-    quiz_stats = db.query(
-        func.count(models.QuizAttempt.id),
-        func.avg(models.QuizAttempt.score),
-        func.avg(models.QuizAttempt.total)
-    ).filter(models.QuizAttempt.user_id == user_id).first()
-    
-    quizzes_taken = quiz_stats[0] or 0
-    avg_score = 0.0
-    if quizzes_taken > 0 and quiz_stats[2] and quiz_stats[2] > 0:
-        avg_score = (quiz_stats[1] / quiz_stats[2]) * 100
-    
-    enrollments_count = db.query(models.Enrollment).filter(
-        models.Enrollment.user_id == user_id, 
-        models.Enrollment.status == "approved"
-    ).count()
-
-    # Recent Activity
-    recent_activity = []
-    
-    # Recent Quizzes
-    recent_quizzes = db.query(models.QuizAttempt).filter(
-        models.QuizAttempt.user_id == user_id
-    ).order_by(models.QuizAttempt.date.desc()).limit(5).all()
-    
-    for q in recent_quizzes:
-        quiz = db.query(models.Quiz).filter(models.Quiz.id == q.quiz_id).first()
-        recent_activity.append(schemas.RecentActivity(
-            id=q.id,
-            type="quiz_attempt",
-            title=quiz.title if quiz else "Quiz",
-            date=q.date,
-            detail=f"Scored {q.score}/{q.total}"
-        ))
-    
-    # Sort activity by date (parsing date string)
-    # Since topic completions don't have dates, we'll just prioritize quizzes for now 
-    # or add a dummy date for completions if we want them there.
-    
-    # Professor Stats
-    managed_students = 0
+    # If is professor
+    managed = 0
     total_courses = 0
-    if user.role == "professor":
-        courses = db.query(models.Course).filter(models.Course.professor_id == user_id).all()
-        total_courses = len(courses)
-        course_ids = [c.id for c in courses]
-        managed_students = db.query(models.Enrollment).filter(
-            models.Enrollment.course_id.in_(course_ids),
-            models.Enrollment.status == "approved"
-        ).count() if course_ids else 0
+    if user_data['role'] == 'professor':
+        managed = db.execute(text("SELECT COUNT(DISTINCT user_id) FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE c.professor_id=:id AND e.status='approved'"), {"id": user_id}).scalar()
+        total_courses = db.execute(text("SELECT COUNT(*) FROM courses WHERE professor_id=:id"), {"id": user_id}).scalar()
 
-    user_stats = schemas.UserStats(
-        completed_topics_count=completed_topics,
-        quizzes_taken_count=quizzes_taken,
-        average_quiz_score=round(float(avg_score or 0), 1),
-        courses_enrolled_count=enrollments_count,
-        managed_students_count=managed_students,
-        total_courses_count=total_courses,
-        recent_activity=recent_activity
-    )
+    # recent activity
+    recent = []
+    # from topics
+    acts = db.execute(text("SELECT t.title, 'topic_completion' as type, 'Completed topic' as detail FROM topic_completions tc JOIN topics t ON tc.topic_id = t.id WHERE tc.user_id=:id ORDER BY t.\"order\" DESC LIMIT 3"), {"id": user_id}).fetchall()
+    for a in acts:
+        recent.append({
+            "id": str(uuid.uuid4()), 
+            "title": a[0], 
+            "type": a[1], 
+            "date": "Recently", 
+            "detail": a[2]
+        })
+
+    user_data['stats'] = {
+        "completed_topics_count": tc or 0,
+        "quizzes_taken_count": qa[0] or 0,
+        "average_quiz_score": round(qa[1] or 0, 1),
+        "courses_enrolled_count": en or 0,
+        "managed_students_count": managed or 0,
+        "total_courses_count": total_courses or 0,
+        "recent_activity": recent
+    }
     
-    user_schema = schemas.User.model_validate(user)
-    user_schema.stats = user_stats
-    return user_schema
+    return user_data
 
 @router.put("/{user_id}", response_model=schemas.User)
 def update_profile(user_id: str, data: schemas.ProfileUpdate, db: Session = Depends(get_db)):
     user = crud.update_user_profile(db, user_id, data)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    # Returns the updated user with stats
+    return get_profile(user_id, db)

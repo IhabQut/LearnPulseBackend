@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import text
 from typing import List
 from pydantic import BaseModel
-
-import models
 import schemas
 import crud
 from database import get_db
@@ -13,185 +11,108 @@ router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.post("/chapter/{chapter_id}/summary")
 def generate_chapter_summary(chapter_id: str, db: Session = Depends(get_db)):
-    """Simulate AI summary generation based on chapter topics."""
-    chapter = db.query(models.Chapter).filter(models.Chapter.id == chapter_id).first()
-    if not chapter:
-        return {"summary": "Chapter not found."}
+    chapter = db.execute(text("SELECT * FROM chapters WHERE id=:id"), {"id": chapter_id}).fetchone()
+    if not chapter: return {"summary": "Chapter not found."}
     
-    topics = db.query(models.Topic).filter(models.Topic.chapter_id == chapter_id).all()
-    if not topics:
-        return {"summary": "No topics found in this chapter to summarize."}
+    topics = db.execute(text("SELECT title FROM topics WHERE chapter_id=:id"), {"id": chapter_id}).fetchall()
+    if not topics: return {"summary": "No topics found in this chapter to summarize."}
     
     topic_titles = [t.title for t in topics]
-    
-    # Mock AI logic: constructs a summary based on topic titles
     summary_start = f"In this chapter on {chapter.title}, we explore {len(topic_titles)} key concepts: "
     if len(topic_titles) > 1:
         summary_body = ", ".join(topic_titles[:-1]) + f", and {topic_titles[-1]}"
     else:
         summary_body = topic_titles[0]
     summary_end = ". Students will gain a foundational understanding of these areas and their practical applications."
-    
-    generated_summary = f"{summary_start}{summary_body}{summary_end}"
-    
-    return {"summary": generated_summary}
+    return {"summary": f"{summary_start}{summary_body}{summary_end}"}
 
 @router.get("/course/{course_id}", response_model=schemas.AIReport)
 def get_course_analytics(course_id: str, db: Session = Depends(get_db)):
-    """Generate AI analysis report for a course based on quiz data."""
-    course = db.query(models.Course).filter(models.Course.id == course_id).first()
-    if not course:
-        return schemas.AIReport(course_title="Unknown", total_students=0, insight="Course not found.")
+    c = db.execute(text("SELECT title FROM courses WHERE id=:id"), {"id": course_id}).fetchone()
+    if not c: return schemas.AIReport(course_title="Unknown", total_students=0, insight="Course not found.")
 
-    # Get enrolled students
-    enrolled = db.query(models.Enrollment).filter(
-        models.Enrollment.course_id == course_id,
-        models.Enrollment.status == "approved"
-    ).all()
+    enrolled = db.execute(text("SELECT user_id FROM enrollments WHERE course_id=:cid AND status='approved'"), {"cid": course_id}).fetchall()
     enrolled_ids = [e.user_id for e in enrolled]
     
-    # Fallback: if no enrollments, use all students
     if not enrolled_ids:
-        students = db.query(models.User).filter(models.User.role == "student").all()
-        enrolled_ids = [s.id for s in students]
+        all_s = db.execute(text("SELECT id FROM users WHERE role='student'")).fetchall()
+        enrolled_ids = [s.id for s in all_s]
 
-    total_students = len(enrolled_ids)
+    topics = db.execute(text("""
+        SELECT t.id, t.title, ch.title as ch_title
+        FROM topics t
+        JOIN chapters ch ON ch.id = t.chapter_id
+        WHERE ch.course_id = :cid
+    """), {"cid": course_id}).fetchall()
 
-    # Get all chapters, topics, quizzes
-    chapters = db.query(models.Chapter).filter(models.Chapter.course_id == course_id).all()
-    chapter_map = {ch.id: ch.title for ch in chapters}
-    chapter_ids = list(chapter_map.keys())
-
-    topics = db.query(models.Topic).filter(models.Topic.chapter_id.in_(chapter_ids)).all()
-    topic_map = {t.id: (t.title, t.chapter_id) for t in topics}
-    topic_ids = list(topic_map.keys())
-
-    # Analyze quiz performance per topic
     struggling = []
-    for topic_id, (topic_title, ch_id) in topic_map.items():
-        quiz = db.query(models.Quiz).filter(models.Quiz.topic_id == topic_id).first()
-        if not quiz:
-            continue
-        
-        attempts = db.query(models.QuizAttempt).filter(
-            models.QuizAttempt.quiz_id == quiz.id,
-            models.QuizAttempt.is_first_attempt == True
-        ).all()
-        
-        if not attempts:
-            continue
-        
-        total_score = sum(a.score for a in attempts)
-        total_possible = sum(a.total for a in attempts)
-        
-        if total_possible > 0:
-            success_rate = total_score / total_possible
-            fail_rate = round((1 - success_rate) * 100, 1)
-            
-            if fail_rate > 20:  # Flag topics with >20% fail rate
+    for t in topics:
+        q = db.execute(text("SELECT id FROM quizzes WHERE topic_id=:tid"), {"tid": t.id}).fetchone()
+        if not q: continue
+        res = db.execute(text("SELECT SUM(score) as sum_s, SUM(total) as sum_t FROM quiz_attempts WHERE quiz_id=:qid AND is_first_attempt=1"), {"qid": q.id}).fetchone()
+        if res and res.sum_t and res.sum_t > 0:
+            fail_rate = round((1 - (res.sum_s / res.sum_t)) * 100, 1)
+            if fail_rate > 20:
                 struggling.append(schemas.StrugglingTopic(
-                    topic_title=topic_title,
-                    chapter_title=chapter_map.get(ch_id, ""),
-                    fail_rate=fail_rate,
-                    common_mistake=f"{fail_rate}% of students answered incorrectly on questions about {topic_title}."
+                    topic_title=t.title, chapter_title=t.ch_title, fail_rate=fail_rate,
+                    common_mistake=f"{fail_rate}% of students answered incorrectly."
                 ))
-
     struggling.sort(key=lambda x: x.fail_rate, reverse=True)
 
-    # Student participation analysis
     low_participation = []
     high_performers = []
-    
     for uid in enrolled_ids:
-        user = db.query(models.User).filter(models.User.id == uid).first()
-        if not user:
-            continue
+        u = db.execute(text("SELECT name FROM users WHERE id=:uid"), {"uid": uid}).fetchone()
+        if not u: continue
         
-        topics_done = db.query(models.TopicCompletion).filter(
-            models.TopicCompletion.user_id == uid,
-            models.TopicCompletion.topic_id.in_(topic_ids)
-        ).count()
+        tc = db.execute(text("""
+            SELECT COUNT(*) as c FROM topic_completions tc
+            JOIN topics t ON t.id = tc.topic_id
+            JOIN chapters ch ON ch.id = t.chapter_id
+            WHERE tc.user_id = :uid AND ch.course_id = :cid
+        """), {"uid": uid, "cid": course_id}).fetchone().c
         
-        quizzes_taken = db.query(models.QuizAttempt).filter(
-            models.QuizAttempt.user_id == uid
-        ).count()
+        qc = db.execute(text("""
+            SELECT COUNT(*) as c FROM quiz_attempts qa
+            JOIN quizzes q ON q.id = qa.quiz_id
+            LEFT JOIN topics t ON t.id = q.topic_id
+            LEFT JOIN chapters ch ON ch.id = q.chapter_id OR ch.id = t.chapter_id
+            WHERE qa.user_id = :uid AND ch.course_id = :cid
+        """), {"uid": uid, "cid": course_id}).fetchone().c
         
-        entry = schemas.StudentParticipation(
-            student_id=uid,
-            student_name=user.name,
-            topics_completed=topics_done,
-            quizzes_taken=quizzes_taken
-        )
-        
-        if topics_done == 0 and quizzes_taken == 0:
-            low_participation.append(entry)
-        elif topics_done >= len(topic_ids) * 0.7:
-            high_performers.append(entry)
+        entry = schemas.StudentParticipation(student_id=uid, student_name=u.name, topics_completed=tc, quizzes_taken=qc)
+        if tc == 0 and qc == 0: low_participation.append(entry)
+        elif tc >= len(topics) * 0.7: high_performers.append(entry)
 
-    # Generate insight
     insight_parts = []
-    if struggling:
-        insight_parts.append(f"Students are struggling most with '{struggling[0].topic_title}' ({struggling[0].fail_rate}% fail rate).")
-    if low_participation:
-        names = ", ".join(s.student_name for s in low_participation[:3])
-        insight_parts.append(f"Students not participating: {names}.")
-    if high_performers:
-        insight_parts.append(f"{len(high_performers)} students are performing above average.")
+    if struggling: insight_parts.append(f"Students are struggling most with '{struggling[0].topic_title}' ({struggling[0].fail_rate}% fail rate).")
+    if low_participation: insight_parts.append(f"Students not participating: {', '.join(s.student_name for s in low_participation[:3])}.")
+    if high_performers: insight_parts.append(f"{len(high_performers)} students are performing above average.")
     
-    insight = " ".join(insight_parts) if insight_parts else "Not enough data to generate insights yet. Students need to complete more quizzes."
-
     return schemas.AIReport(
-        course_title=course.title,
-        total_students=total_students,
-        struggling_topics=struggling,
-        low_participation=low_participation,
+        course_title=c.title, total_students=len(enrolled_ids),
+        struggling_topics=struggling, low_participation=low_participation,
         high_performers=high_performers,
-        insight=insight
+        insight=" ".join(insight_parts) if insight_parts else "Not enough data to generate insights yet."
     )
 
 @router.get("/student/{student_id}", response_model=schemas.StudentAnalyticsOut)
 def get_student_analytics(student_id: str, db: Session = Depends(get_db)):
-    """Fetch analytics for a specific student (quiz history, recommendations, overall progress)."""
-    # 1. Quiz History
-    attempts = db.query(models.QuizAttempt).filter(models.QuizAttempt.user_id == student_id).all()
-    quiz_history = []
-    for a in attempts:
-        quiz = db.query(models.Quiz).filter(models.Quiz.id == a.quiz_id).first()
-        res = schemas.StudentQuizAttempt.model_validate(a)
-        res.quiz_title = quiz.title if quiz else "Unknown Quiz"
-        quiz_history.append(res)
+    qh = db.execute(text("""
+        SELECT qa.*, q.title as quiz_title, '' as user_name
+        FROM quiz_attempts qa
+        JOIN quizzes q ON q.id = qa.quiz_id
+        WHERE qa.user_id = :uid
+    """), {"uid": student_id}).fetchall()
+    quiz_history = [schemas.StudentQuizAttempt.model_validate(dict(a._mapping)) for a in qh]
     
-    # 2. Recommended Topics (from CRUD helper)
-    recommended = crud.get_next_recommended_topic(db, student_id)
+    rec = crud.get_next_recommended_topic(db, student_id)
     
-    # 3. Overall Progress
-    # Get all topics in all courses the student is enrolled in
-    enrollments = db.query(models.Enrollment).filter(
-        models.Enrollment.user_id == student_id,
-        models.Enrollment.status == "approved"
-    ).all()
+    res = db.execute(text("""
+        SELECT 
+            (SELECT COUNT(*) FROM topics t JOIN chapters ch ON ch.id = t.chapter_id JOIN enrollments e ON e.course_id = ch.course_id WHERE e.user_id = :uid AND e.status='approved') as total_t,
+            (SELECT COUNT(*) FROM topic_completions tc JOIN topics t ON t.id = tc.topic_id JOIN chapters ch ON ch.id = t.chapter_id JOIN enrollments e ON e.course_id = ch.course_id WHERE e.user_id = :uid AND tc.user_id = :uid AND e.status='approved') as comp_t
+    """), {"uid": student_id}).fetchone()
     
-    total_topics = 0
-    completed_topics = 0
-    
-    for en in enrollments:
-        course = db.query(models.Course).filter(models.Course.id == en.course_id).first()
-        if not course: continue
-        
-        for chapter in course.chapters:
-            for topic in chapter.topics:
-                total_topics += 1
-                done = db.query(models.TopicCompletion).filter(
-                    models.TopicCompletion.user_id == student_id,
-                    models.TopicCompletion.topic_id == topic.id
-                ).first()
-                if done:
-                    completed_topics += 1
-                    
-    progress = (completed_topics / total_topics * 100) if total_topics > 0 else 0
-    
-    return schemas.StudentAnalyticsOut(
-        quiz_attempts=quiz_history,
-        recommended_topics=recommended,
-        overall_progress=round(progress, 1)
-    )
+    prog = (res.comp_t / res.total_t * 100) if res.total_t > 0 else 0
+    return schemas.StudentAnalyticsOut(quiz_attempts=quiz_history, recommended_topics=rec, overall_progress=round(prog, 1))

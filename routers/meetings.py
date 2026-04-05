@@ -24,15 +24,20 @@ def create_meeting(data: schemas.MeetingRequestCreate, user_id: str = None, db: 
     crud.create_notification(db, schemas.NotificationCreate(
         user_id=meeting.professor_id,
         title="New Meeting Request",
-        message=f"{user.name if user else 'A student'} has requested a meeting on {meeting.slot}.",
+        message=f"{user['name'] if user else 'A student'} has requested a meeting on {meeting.slot}.",
         type="info",
         date=datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
     
     return schemas.MeetingRequestOut(
-        **meeting.__dict__,
-        user_name=user.name if user else "Unknown",
-        professor_name=professor.name if professor else "Unknown"
+        id=meeting.id,
+        user_id=meeting.user_id,
+        professor_id=meeting.professor_id,
+        slot=meeting.slot,
+        status=meeting.status,
+        date=meeting.date,
+        user_name=user['name'] if user else "Unknown",
+        professor_name=professor['name'] if professor else "Unknown"
     )
 
 @router.get("", response_model=List[schemas.MeetingRequestOut])
@@ -44,9 +49,14 @@ def get_meetings(user_id: str = None, db: Session = Depends(get_db)):
         user = crud.get_user(db, m.user_id)
         professor = crud.get_user(db, m.professor_id)
         result.append(schemas.MeetingRequestOut(
-            **m.__dict__,
-            user_name=user.name if user else "Unknown",
-            professor_name=professor.name if professor else "Unknown"
+            id=m.id,
+            user_id=m.user_id,
+            professor_id=m.professor_id,
+            slot=m.slot,
+            status=m.status,
+            date=m.date,
+            user_name=user['name'] if user else "Unknown",
+            professor_name=professor['name'] if professor else "Unknown"
         ))
     return result
 
@@ -63,13 +73,18 @@ def update_meeting_status(meeting_id: str, status: str, db: Session = Depends(ge
     crud.create_notification(db, schemas.NotificationCreate(
         user_id=meeting.user_id,
         title=f"Meeting {status.capitalize()}",
-        message=f"Professor {professor.name if professor else 'Unknown'} has {status} your meeting request for {meeting.slot}.",
+        message=f"Professor {professor['name'] if professor else 'Unknown'} has {status} your meeting request for {meeting.slot}.",
         type="success" if status == "approved" else "warning",
         date=datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
     
     return schemas.MeetingRequestOut(
-        **meeting.__dict__,
-        user_name=user.name if user else "Unknown",
-        professor_name=professor.name if professor else "Unknown"
+        id=meeting.id,
+        user_id=meeting.user_id,
+        professor_id=meeting.professor_id,
+        slot=meeting.slot,
+        status=meeting.status,
+        date=meeting.date,
+        user_name=user['name'] if user else "Unknown",
+        professor_name=professor['name'] if professor else "Unknown"
     )

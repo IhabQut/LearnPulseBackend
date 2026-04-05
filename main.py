@@ -8,6 +8,9 @@ from database import engine
 
 from routers import auth, courses, discussions, leaderboard, quizzes, profile, analytics, enrollment, meetings, materials, notifications
 
+import logging
+logging.basicConfig(level=logging.INFO)
+
 models.Base.metadata.create_all(bind=engine)
 
 # Allowed frontend origins for CORS
@@ -19,6 +22,19 @@ CORS_ORIGINS = (
 )
 
 app = FastAPI(title="AI Learning Hub API")
+
+
+# ─── Global Exception Handler ────────────────────────────────────
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and return structured JSON."""
+    logging.error(f"Unhandled error on {request.method} {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Please try again later.", "error": str(exc)}
+    )
 
 
 class EnsureCORSHeadersMiddleware(BaseHTTPMiddleware):

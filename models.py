@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, Float
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -7,17 +7,54 @@ class User(Base):
 
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
-    role = Column(String)
-    points = Column(Integer, default=0)
+    role = Column(String) # 'student' or 'professor'
     email = Column(String, default="")
+    phone_number = Column(String, default="")
     bio = Column(Text, default="")
-    office_hours = Column(Text, default="[]")   # JSON string for professors
+
+    # Relationships
+    professor_profile = relationship("Professor", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    student_profile = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    topic_completions = relationship("TopicCompletion", back_populates="user")
+    enrollments = relationship("Enrollment", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+
+class Professor(Base):
+    __tablename__ = "professors"
+
+    id = Column(String, ForeignKey("users.id"), primary_key=True)
+    department = Column(String, default="")
+    expertise = Column(String, default="")
+    academic_rank = Column(String, default="") # Assistant Prof, Associate Prof, etc.
+    office_location = Column(String, default="")
     meeting_link = Column(String, default="")
     zoom_enabled = Column(Boolean, default=True)
     in_person_enabled = Column(Boolean, default=True)
 
-    topic_completions = relationship("TopicCompletion", back_populates="user")
-    enrollments = relationship("Enrollment", back_populates="user")
+    user = relationship("User", back_populates="professor_profile")
+    office_hours = relationship("UserOfficeHour", back_populates="professor", cascade="all, delete-orphan")
+
+class Student(Base):
+    __tablename__ = "students"
+
+    id = Column(String, ForeignKey("users.id"), primary_key=True)
+    points = Column(Integer, default=0)
+    major = Column(String, default="")
+    level = Column(String, default="Undergraduate") # Undergraduate, Graduate, PhD
+    gpa = Column(Float, default=0.0)
+    graduation_year = Column(Integer, nullable=True)
+
+    user = relationship("User", back_populates="student_profile")
+
+class UserOfficeHour(Base):
+    __tablename__ = "user_office_hours"
+
+    id = Column(String, primary_key=True, index=True)
+    professor_id = Column(String, ForeignKey("professors.id"))
+    day = Column(String)
+    time = Column(String)
+
+    professor = relationship("Professor", back_populates="office_hours")
 
 class Course(Base):
     __tablename__ = "courses"
@@ -25,13 +62,14 @@ class Course(Base):
     id = Column(String, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(Text)
-    professor_id = Column(String, ForeignKey("users.id"), nullable=True)
+    owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+    is_open = Column(Boolean, default=True)
 
     chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
     materials = relationship("Material", back_populates="course", cascade="all, delete-orphan")
     discussions = relationship("Discussion", back_populates="course")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
-    professor = relationship("User", foreign_keys=[professor_id])
+    owner = relationship("User", foreign_keys=[owner_id])
 
 class Material(Base):
     __tablename__ = "materials"
@@ -110,6 +148,20 @@ class Reply(Base):
     discussion = relationship("Discussion", back_populates="replies")
     user = relationship("User")
 
+class DiscussionVote(Base):
+    __tablename__ = "discussion_votes"
+
+    discussion_id = Column(String, ForeignKey("discussions.id"), primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), primary_key=True)
+    vote_type = Column(Integer, default=0)
+
+class ReplyVote(Base):
+    __tablename__ = "reply_votes"
+
+    reply_id = Column(String, ForeignKey("replies.id"), primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), primary_key=True)
+    vote_type = Column(Integer, default=0)
+
 # ─── Quiz System ────────────────────────────────────────────────
 
 class Quiz(Base):
@@ -130,11 +182,20 @@ class QuizQuestion(Base):
     id = Column(String, primary_key=True, index=True)
     quiz_id = Column(String, ForeignKey("quizzes.id"))
     question = Column(Text)
-    options = Column(Text)  # JSON string of options list
-    correct_option = Column(Integer)
     explanation = Column(Text)
 
     quiz = relationship("Quiz", back_populates="questions")
+    options = relationship("QuizOption", back_populates="question", cascade="all, delete-orphan")
+
+class QuizOption(Base):
+    __tablename__ = "quiz_options"
+
+    id = Column(String, primary_key=True, index=True)
+    question_id = Column(String, ForeignKey("quiz_questions.id"))
+    text = Column(String)
+    is_correct = Column(Boolean, default=False)
+
+    question = relationship("QuizQuestion", back_populates="options")
 
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
@@ -159,6 +220,7 @@ class Enrollment(Base):
     user_id = Column(String, ForeignKey("users.id"))
     course_id = Column(String, ForeignKey("courses.id"))
     status = Column(String, default="pending")  # 'pending' or 'approved'
+    role = Column(String, default="student")    # 'owner', 'instructor', 'student', 'viewer'
     date = Column(String)
 
     user = relationship("User", back_populates="enrollments")
@@ -192,4 +254,4 @@ class Notification(Base):
     is_read = Column(Boolean, default=False)
     date = Column(String)
 
-    user = relationship("User")
+    user = relationship("User", back_populates="notifications")

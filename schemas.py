@@ -1,11 +1,37 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+import re
 
 class UserBase(BaseModel):
     id: str
     name: str
     role: str
+    email: Optional[str] = ""
+    phone_number: Optional[str] = ""
+    bio: Optional[str] = ""
+
+class StudentProfile(BaseModel):
     points: int = 0
+    major: str = ""
+    level: str = "Undergraduate"
+    gpa: float = 0.0
+    graduation_year: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class ProfessorProfile(BaseModel):
+    department: str = ""
+    expertise: str = ""
+    academic_rank: str = ""
+    office_location: str = ""
+    meeting_link: str = ""
+    zoom_enabled: bool = True
+    in_person_enabled: bool = True
+    office_hours: str = "[]" # Serialized JSON
+
+    class Config:
+        from_attributes = True
 
 class RecentActivity(BaseModel):
     id: str
@@ -24,12 +50,8 @@ class UserStats(BaseModel):
     recent_activity: List[RecentActivity] = []
 
 class User(UserBase):
-    email: str = ""
-    bio: str = ""
-    office_hours: str = "[]"
-    meeting_link: str = ""
-    zoom_enabled: bool = True
-    in_person_enabled: bool = True
+    student: Optional[StudentProfile] = None
+    professor: Optional[ProfessorProfile] = None
     stats: Optional[UserStats] = None
 
     class Config:
@@ -38,8 +60,20 @@ class User(UserBase):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+    phone_number: Optional[str] = None
     bio: Optional[str] = None
-    office_hours: Optional[str] = None
+    
+    # Student fields
+    major: Optional[str] = None
+    level: Optional[str] = None
+    graduation_year: Optional[int] = None
+    
+    # Professor fields
+    department: Optional[str] = None
+    expertise: Optional[str] = None
+    academic_rank: Optional[str] = None
+    office_location: Optional[str] = None
+    office_hours: Optional[str] = None # JSON string
     meeting_link: Optional[str] = None
     zoom_enabled: Optional[bool] = None
     in_person_enabled: Optional[bool] = None
@@ -93,8 +127,8 @@ class Topic(TopicBase):
         from_attributes = True
 
 class TopicCreate(BaseModel):
-    title: str
-    description: str
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1, max_length=5000)
 
 class TopicUpdate(BaseModel):
     title: Optional[str] = None
@@ -112,8 +146,8 @@ class Chapter(ChapterBase):
         from_attributes = True
 
 class ChapterCreate(BaseModel):
-    title: str
-    summary: str = ""
+    title: str = Field(..., min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=5000)
 
 class ChapterUpdate(BaseModel):
     title: Optional[str] = None
@@ -123,19 +157,26 @@ class CourseBase(BaseModel):
     id: str
     title: str
     description: str
+    is_open: bool = True
 
 class CourseCreate(BaseModel):
-    title: str
-    description: str
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(..., min_length=1, max_length=5000)
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    is_open: Optional[bool] = None
 
 class Course(CourseBase):
     materials: List[Material] = []
     chapters: List[Chapter] = []
     professor_id: Optional[str] = None
+    professor_name: Optional[str] = ""
+    student_count: int = 0
+    category: Optional[str] = ""
+    image: Optional[str] = ""
+    user_role: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -147,6 +188,8 @@ class ReplyBase(BaseModel):
     text: str
     date: str
     role: str
+    upvotes: int = 0
+    userVote: int = Field(default=0, alias="user_vote")
 
     class Config:
         populate_by_name = True  # accept authorId or author_id in request body
@@ -166,6 +209,15 @@ class DiscussionBase(BaseModel):
     courseId: Optional[str] = Field(default=None, alias="course_id")
     chapterId: Optional[str] = Field(default=None, alias="chapter_id")
     topicId: Optional[str] = Field(default=None, alias="topic_id")
+    upvotes: int = 0
+    userVote: int = Field(default=0, alias="user_vote")
+
+    class Config:
+        populate_by_name = True
+
+class VoteRequest(BaseModel):
+    user_id: str
+    vote_type: int
 
 class Discussion(DiscussionBase):
     replies: int = 0
@@ -182,14 +234,20 @@ class EnrollmentOut(BaseModel):
     user_id: str
     course_id: str
     status: str
+    role: str
     date: str
     user_name: str = ""
 
     class Config:
         from_attributes = True
 
+class EnrollRequest(BaseModel):
+    course_id: str
+    role: Optional[str] = "student" # 'student' or 'viewer'
+
 class EnrollStudentRequest(BaseModel):
     user_id: str
+    role: Optional[str] = "student"
 
 class PointAward(BaseModel):
     user_id: str
