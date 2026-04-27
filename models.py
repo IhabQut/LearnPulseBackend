@@ -8,7 +8,8 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
     role = Column(String) # 'student' or 'professor'
-    email = Column(String, default="")
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False, default="")
     phone_number = Column(String, default="")
     bio = Column(Text, default="")
 

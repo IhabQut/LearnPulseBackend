@@ -2,6 +2,50 @@ from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 import re
 
+# ─── Auth Schemas ────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=6, max_length=128)
+    role: str = Field(default="student")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(pattern, v):
+            raise ValueError("Invalid email address")
+        return v.lower().strip()
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in ("student", "professor"):
+            raise ValueError("Role must be 'student' or 'professor'")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return v.strip()
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=1)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.lower().strip()
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: "User"  # Forward reference resolved below
+
+
+
 class UserBase(BaseModel):
     id: str
     name: str
@@ -364,3 +408,7 @@ class StudentAnalyticsOut(BaseModel):
     quiz_attempts: List[StudentQuizAttempt] = []
     recommended_topics: List[RecommendedTopic] = []
     overall_progress: float = 0.0
+
+# Resolve forward references
+TokenResponse.model_rebuild()
+

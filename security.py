@@ -1,23 +1,105 @@
 """
-Role-based access control for LearnPulse API.
+Role-based access control + JWT authentication for LearnPulse API.
 Provides dependency functions for FastAPI routes to validate user identity and permissions.
 """
-from fastapi import Depends, HTTPException, Query
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+import bcrypt
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
 from database import get_db
 
+# ─── JWT Configuration ───────────────────────────────────────────
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "learnpulse-dev-secret-change-in-production-2024")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-def get_current_user(user_id: str = Query(None, alias="user_id"), db: Session = Depends(get_db)):
-    """Validate that user_id exists in the database and return the user row."""
+# ─── OAuth2 Scheme ───────────────────────────────────────────────
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
+    pw_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pw_bytes, salt).decode("utf-8")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash."""
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    except Exception:
+        return False
+
+
+def create_access_token(user_id: str, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a signed JWT token containing the user_id."""
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    to_encode = {"sub": user_id, "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(token: str) -> Optional[str]:
+    """Decode a JWT token and return the user_id, or None if invalid."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        return user_id
+    except JWTError:
+        return None
+
+
+# ─── Auth Dependencies ───────────────────────────────────────────
+
+def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Validate JWT token and return the user row. Raises 401 if invalid."""
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Provide a valid token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id = verify_token(token)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required. Provide user_id.")
-    
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user = db.execute(text("SELECT * FROM users WHERE id=:id"), {"id": user_id}).fetchone()
     if not user:
-        raise HTTPException(status_code=401, detail=f"User '{user_id}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"User not found.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
+
+def get_optional_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """Like get_current_user but returns None instead of raising 401."""
+    if not token:
+        return None
+    user_id = verify_token(token)
+    if not user_id:
+        return None
+    user = db.execute(text("SELECT * FROM users WHERE id=:id"), {"id": user_id}).fetchone()
+    return user
+
+
+# ─── Role & Permission Helpers ────────────────────────────────────
 
 def get_course_role(db: Session, user_id: str, course_id: str):
     """Fetch the specific role of a user in a course."""

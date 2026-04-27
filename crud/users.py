@@ -4,7 +4,15 @@ import schemas
 import models
 import uuid
 import json
-from typing import List
+from typing import List, Optional
+
+def get_user_by_email(db: Session, email: str) -> Optional[dict]:
+    """Fetch user by email address."""
+    user = db.execute(text("SELECT * FROM users WHERE email=:email"), {"email": email.lower().strip()}).fetchone()
+    if not user:
+        return None
+    return dict(user._mapping)
+
 
 def get_user(db: Session, user_id: str):
     """Fetch user with specialized profile based on role."""
