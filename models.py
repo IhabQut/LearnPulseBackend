@@ -256,3 +256,39 @@ class Notification(Base):
     date = Column(String)
 
     user = relationship("User", back_populates="notifications")
+
+# ─── Textbook / AI Course Builder ───────────────────────────────
+
+class CourseTextbook(Base):
+    __tablename__ = "course_textbooks"
+
+    id = Column(String, primary_key=True, index=True)
+    course_id = Column(String, ForeignKey("courses.id"))
+    filename = Column(String)
+    file_type = Column(String)   # pdf, docx, txt
+    status = Column(String, default="done")  # pending, analyzing, done
+
+    course = relationship("Course")
+
+class GradingComponent(Base):
+    __tablename__ = "grading_components"
+
+    id = Column(String, primary_key=True, index=True)
+    course_id = Column(String, ForeignKey("courses.id"))
+    name = Column(String)
+    weight = Column(Float)
+    component_type = Column(String, default="assessment")
+
+    course = relationship("Course")
+
+class SemesterWeek(Base):
+    __tablename__ = "semester_weeks"
+
+    id = Column(String, primary_key=True, index=True)
+    course_id = Column(String, ForeignKey("courses.id"))
+    week_num = Column(Integer)
+    chapter_title = Column(String, default="")
+    topics_json = Column(Text, default="[]")
+    notes = Column(String, default="")
+
+    course = relationship("Course")

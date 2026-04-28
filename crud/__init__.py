@@ -8,3 +8,4 @@ from .materials import *
 from .topics import *
 from .notifications import *
 from .analytics import *
+from .textbook import *

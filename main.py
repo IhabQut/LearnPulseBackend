@@ -6,7 +6,7 @@ from starlette.requests import Request
 import models
 from database import engine
 
-from routers import auth, courses, discussions, leaderboard, quizzes, profile, analytics, enrollment, meetings, materials, notifications
+from routers import auth, courses, discussions, leaderboard, quizzes, profile, analytics, enrollment, meetings, materials, notifications, textbook
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -73,3 +73,4 @@ app.include_router(enrollment.router)
 app.include_router(meetings.router)
 app.include_router(materials.router)
 app.include_router(notifications.router)
+app.include_router(textbook.router)

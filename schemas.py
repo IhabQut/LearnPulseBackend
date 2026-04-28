@@ -409,6 +409,58 @@ class StudentAnalyticsOut(BaseModel):
     recommended_topics: List[RecommendedTopic] = []
     overall_progress: float = 0.0
 
+# ─── AI Course Builder ───────────────────────────────────────
+
+class DraftTopic(BaseModel):
+    title: str
+    description: str = ""
+
+class DraftChapter(BaseModel):
+    title: str
+    summary: str = ""
+    topics: List[DraftTopic] = []
+
+class BulkSaveChaptersRequest(BaseModel):
+    chapters: List[DraftChapter]
+
+class GradingComponentCreate(BaseModel):
+    name: str
+    weight: float
+    component_type: str = "assessment"
+
+class GradingComponentOut(BaseModel):
+    id: str
+    course_id: str
+    name: str
+    weight: float
+    component_type: str
+
+    class Config:
+        from_attributes = True
+
+class SaveGradingRequest(BaseModel):
+    components: List[GradingComponentCreate]
+
+class SemesterWeekCreate(BaseModel):
+    week_num: int
+    chapter_title: str = ""
+    topics_json: str = "[]"
+    notes: str = ""
+
+class SemesterWeekOut(BaseModel):
+    id: str
+    course_id: str
+    week_num: int
+    chapter_title: str
+    topics_json: str
+    notes: str
+
+    class Config:
+        from_attributes = True
+
+class SaveSemesterPlanRequest(BaseModel):
+    weeks: List[SemesterWeekCreate]
+
 # Resolve forward references
 TokenResponse.model_rebuild()
 
