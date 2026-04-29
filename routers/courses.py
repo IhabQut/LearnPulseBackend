@@ -12,8 +12,18 @@ from database import get_db
 router = APIRouter(prefix="/api", tags=["Courses"])
 
 @router.get("/courses", response_model=List[schemas.Course])
-def read_courses(user_id: str = "u1", db: Session = Depends(get_db)):
-    return crud.get_courses(db, user_id=user_id)
+def read_courses(user_id: str = "u1", enrolled_only: bool = False, db: Session = Depends(get_db)):
+    return crud.get_courses(db, user_id=user_id, enrolled_only=enrolled_only)
+
+@router.get("/courses/{course_id}", response_model=schemas.Course)
+def read_course(course_id: str, user_id: str = "u1", db: Session = Depends(get_db)):
+    # Security: check if user is enrolled or professor/owner
+    security.require_course_permission(db, user_id, course_id, allowed_roles=['owner', 'instructor', 'student', 'viewer'])
+    
+    course = crud.get_course(db, course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
 
 @router.post("/courses", response_model=schemas.Course)
 def create_course(data: schemas.CourseCreate, professor_id: str = "p1", db: Session = Depends(get_db)):

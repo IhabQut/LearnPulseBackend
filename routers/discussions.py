@@ -49,11 +49,14 @@ def set_reply_vote(reply_id: str, vote: schemas.VoteRequest, db: Session = Depen
 
 @router.post("/{discussion_id}/award-points")
 def award_discussion_points(discussion_id: str, data: schemas.PointAward, db: Session = Depends(get_db)):
-    import crud as _crud
-    _crud.award_points(db, data.user_id, data.points)
-    _crud.create_notification(db, schemas.NotificationCreate(
-        user_id=data.user_id, title="Points Awarded!",
-        message=f"A professor has awarded you {data.points} points for your contribution to the discussion.",
-        type="success", date=datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
+    d = db.execute(text("SELECT course_id FROM discussions WHERE id=:id"), {"id": discussion_id}).fetchone()
+    if d and d.course_id:
+        import crud.users as _users
+        import crud as _crud
+        _users.award_course_points(db, data.user_id, d.course_id, data.points)
+        _crud.create_notification(db, schemas.NotificationCreate(
+            user_id=data.user_id, title="Points Awarded!",
+            message=f"A professor has awarded you {data.points} points for your contribution to the discussion.",
+            type="success", date=datetime.now().strftime("%Y-%m-%d %H:%M")
+        ))
     return {"message": f"Awarded {data.points} points to user {data.user_id}"}

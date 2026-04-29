@@ -67,6 +67,14 @@ def mark_topic_completed(db: Session, user_id: str, topic_id: str):
     if not res:
         db.execute(text("INSERT INTO topic_completions (user_id, topic_id) VALUES (:u, :t)"),
                    {"u": user_id, "t": topic_id})
-        from .users import award_points
-        award_points(db, user_id, 10)
+        
+        course_id = db.execute(text("""
+            SELECT ch.course_id FROM topics t
+            JOIN chapters ch ON ch.id = t.chapter_id
+            WHERE t.id = :tid
+        """), {"tid": topic_id}).scalar()
+        
+        if course_id:
+            from .users import award_course_points
+            award_course_points(db, user_id, course_id, 10)
         db.commit()

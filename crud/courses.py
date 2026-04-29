@@ -5,10 +5,15 @@ import uuid
 import schemas
 import security
 
-def get_courses(db: Session, user_id: str = "") -> List[schemas.Course]:
-    query = text("""
+def get_courses(db: Session, user_id: str = "", enrolled_only: bool = False) -> List[schemas.Course]:
+    enrollment_filter = ""
+    if enrolled_only:
+        enrollment_filter = "JOIN enrollments e ON e.course_id = c.id AND e.user_id = :user_id AND e.status = 'approved'"
+
+    query = text(f"""
         SELECT 
             c.id AS course_id, c.title AS course_title, c.description AS course_desc, c.owner_id,
+            c.category AS course_category, c.image AS course_image,
             CASE WHEN c.is_open IS NULL THEN 1 ELSE c.is_open END AS course_is_open,
             u.name AS professor_name,
             (SELECT COUNT(*) FROM enrollments e2 WHERE e2.course_id = c.id AND e2.status = 'approved') AS student_count,
@@ -17,6 +22,7 @@ def get_courses(db: Session, user_id: str = "") -> List[schemas.Course]:
             tc.user_id AS completed_by,
             m.id AS mat_id, m.name AS mat_name, m.type AS mat_type, m.url AS mat_url
         FROM courses c
+        {enrollment_filter}
         LEFT JOIN users u ON u.id = c.owner_id
         LEFT JOIN chapters ch ON ch.course_id = c.id
         LEFT JOIN topics t ON t.chapter_id = ch.id
@@ -37,6 +43,8 @@ def get_courses(db: Session, user_id: str = "") -> List[schemas.Course]:
                 "professor_name": r.professor_name or "",
                 "student_count": r.student_count or 0,
                 "is_open": bool(r.course_is_open),
+                "category": r.course_category or "General",
+                "image": r.course_image or "",
                 "user_role": security.get_course_role(db, user_id, cid) if user_id else None,
                 "chapters_dict": {}, "materials_dict": {}
             }
@@ -81,7 +89,7 @@ def get_courses(db: Session, user_id: str = "") -> List[schemas.Course]:
             "student_count": cdata["student_count"], "is_open": cdata["is_open"],
             "user_role": cdata["user_role"],
             "chapters": chapters, "materials": materials,
-            "category": "", "image": ""
+            "category": cdata["category"], "image": cdata["image"]
         }))
         
     return result
@@ -95,8 +103,8 @@ def get_course(db: Session, course_id: str) -> Optional[schemas.Course]:
 
 def create_course(db: Session, data: schemas.CourseCreate, owner_id: str):
     cid = f"c{uuid.uuid4().hex[:8]}"
-    db.execute(text("INSERT INTO courses (id, title, description, owner_id, is_open) VALUES (:id, :title, :desc, :owner, 1)"),
-               {"id": cid, "title": data.title, "desc": data.description, "owner": owner_id})
+    db.execute(text("INSERT INTO courses (id, title, description, category, image, owner_id, is_open) VALUES (:id, :title, :desc, :cat, :img, :owner, 1)"),
+               {"id": cid, "title": data.title, "desc": data.description, "cat": data.category or "General", "img": data.image or "", "owner": owner_id})
     
     # Auto-enroll as owner
     from .enrollment import enroll_student_directly

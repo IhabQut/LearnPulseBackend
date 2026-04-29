@@ -34,8 +34,6 @@ def get_user(db: Session, user_id: str):
         stud = db.execute(text("SELECT * FROM students WHERE id=:id"), {"id": user_id}).fetchone()
         if stud:
             res['student'] = dict(stud._mapping)
-            # Hoist points for easier frontend access
-            res['points'] = stud.points
             
     return res
 
@@ -60,7 +58,7 @@ def create_user(db: Session, user_data: schemas.UserBase):
         ), {"id": user_data.id})
     else:
         db.execute(text(
-            "INSERT INTO students (id, points, major, level, gpa) VALUES (:id, 0, '', 'Undergraduate', 0.0)"
+            "INSERT INTO students (id, major, level, gpa) VALUES (:id, '', 'Undergraduate', 0.0)"
         ), {"id": user_data.id})
         
     db.commit()
@@ -134,8 +132,9 @@ def update_user_profile(db: Session, user_id: str, data: schemas.ProfileUpdate):
     db.commit()
     return get_user(db, user_id)
 
-def award_points(db: Session, user_id: str, points: int):
-    db.execute(text("UPDATE students SET points = points + :p WHERE id=:id"), {"p": points, "id": user_id})
+def award_course_points(db: Session, user_id: str, course_id: str, points: int):
+    db.execute(text("UPDATE enrollments SET points = points + :p WHERE user_id=:u AND course_id=:c"), 
+               {"p": points, "u": user_id, "c": course_id})
     db.commit()
 
 def search_users(db: Session, query: str, role: str = "student"):

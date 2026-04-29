@@ -55,7 +55,6 @@ class UserBase(BaseModel):
     bio: Optional[str] = ""
 
 class StudentProfile(BaseModel):
-    points: int = 0
     major: str = ""
     level: str = "Undergraduate"
     gpa: float = 0.0
@@ -281,6 +280,7 @@ class EnrollmentOut(BaseModel):
     role: str
     date: str
     user_name: str = ""
+    points: int = 0
 
     class Config:
         from_attributes = True

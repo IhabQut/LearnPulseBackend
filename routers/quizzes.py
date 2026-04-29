@@ -95,7 +95,15 @@ def submit_quiz(quiz_id: str, submission: QuizSubmission, db: Session = Depends(
     pts = 0
     if is_first:
         pts = score * 5
-        crud.award_points(db, submission.user_id, pts)
+        course_id = db.execute(text("""
+            SELECT ch.course_id FROM quizzes q
+            LEFT JOIN topics t ON t.id = q.topic_id
+            LEFT JOIN chapters ch ON ch.id = q.chapter_id OR ch.id = t.chapter_id
+            WHERE q.id = :qid
+        """), {"qid": quiz_id}).scalar()
+        if course_id:
+            import crud.users as _users
+            _users.award_course_points(db, submission.user_id, course_id, pts)
     return schemas.QuizAttemptOut(
         id=aid, user_id=submission.user_id, quiz_id=quiz_id, score=score, total=len(qz.questions),
         date="Just now", is_first_attempt=is_first, points_awarded=pts

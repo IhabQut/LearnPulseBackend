@@ -39,7 +39,6 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(String, ForeignKey("users.id"), primary_key=True)
-    points = Column(Integer, default=0)
     major = Column(String, default="")
     level = Column(String, default="Undergraduate") # Undergraduate, Graduate, PhD
     gpa = Column(Float, default=0.0)
@@ -63,6 +62,8 @@ class Course(Base):
     id = Column(String, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(Text)
+    category = Column(String, default="General")
+    image = Column(String, default="")
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
     is_open = Column(Boolean, default=True)
 
@@ -223,6 +224,7 @@ class Enrollment(Base):
     status = Column(String, default="pending")  # 'pending' or 'approved'
     role = Column(String, default="student")    # 'owner', 'instructor', 'student', 'viewer'
     date = Column(String)
+    points = Column(Integer, default=0)
 
     user = relationship("User", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
