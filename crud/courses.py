@@ -125,6 +125,10 @@ def update_course(db: Session, course_id: str, data: schemas.CourseUpdate):
         updates.append("description = :desc"); params["desc"] = data.description
     if data.is_open is not None:
         updates.append("is_open = :is_open"); params["is_open"] = data.is_open
+    if data.category is not None:
+        updates.append("category = :cat"); params["cat"] = data.category
+    if data.image is not None:
+        updates.append("image = :img"); params["img"] = data.image
         
     if updates:
         qs = ", ".join(updates)

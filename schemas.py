@@ -205,11 +205,15 @@ class CourseBase(BaseModel):
 class CourseCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: str = Field(..., min_length=1, max_length=5000)
+    category: Optional[str] = "General"
+    image: Optional[str] = ""
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     is_open: Optional[bool] = None
+    category: Optional[str] = None
+    image: Optional[str] = None
 
 class Course(CourseBase):
     materials: List[Material] = []

@@ -123,6 +123,8 @@ def require_course_permission(db: Session, user_id: str, course_id: str, allowed
 
 def require_professor(user):
     """Global professor check."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
     role = user['role'] if isinstance(user, dict) else user.role
     if role != "professor":
         raise HTTPException(status_code=403, detail="Only professors can perform this action.")
@@ -130,6 +132,8 @@ def require_professor(user):
 
 def require_course_owner(db: Session, user, course_id: str):
     """Strict ownership check for course administration (delete course, manage instructors)."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
     uid = user['id'] if isinstance(user, dict) else user.id
     role = get_course_role(db, uid, course_id)
     if role != 'owner':

@@ -28,8 +28,11 @@ def get_profile(user_id: str, db: Session = Depends(get_db)):
     managed = 0
     total_courses = 0
     if user_data['role'] == 'professor':
-        managed = db.execute(text("SELECT COUNT(DISTINCT user_id) FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE c.professor_id=:id AND e.status='approved'"), {"id": user_id}).scalar()
-        total_courses = db.execute(text("SELECT COUNT(*) FROM courses WHERE professor_id=:id"), {"id": user_id}).scalar()
+        managed = db.execute(text("SELECT COUNT(DISTINCT user_id) FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE c.owner_id=:id AND e.status='approved'"), {"id": user_id}).scalar()
+        total_courses = db.execute(text("SELECT COUNT(*) FROM courses WHERE owner_id=:id"), {"id": user_id}).scalar()
+        meetings_count = db.execute(text("SELECT COUNT(*) FROM meeting_requests WHERE professor_id=:id"), {"id": user_id}).scalar()
+    else:
+        meetings_count = 0
 
     # recent activity
     recent = []
@@ -51,6 +54,7 @@ def get_profile(user_id: str, db: Session = Depends(get_db)):
         "courses_enrolled_count": en or 0,
         "managed_students_count": managed or 0,
         "total_courses_count": total_courses or 0,
+        "meetings_count": meetings_count or 0,
         "recent_activity": recent
     }
     

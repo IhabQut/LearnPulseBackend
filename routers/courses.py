@@ -12,12 +12,14 @@ from database import get_db
 router = APIRouter(prefix="/api", tags=["Courses"])
 
 @router.get("/courses", response_model=List[schemas.Course])
-def read_courses(user_id: str = "u1", enrolled_only: bool = False, db: Session = Depends(get_db)):
+def read_courses(user = Depends(security.get_optional_user), enrolled_only: bool = False, db: Session = Depends(get_db)):
+    user_id = user['id'] if user and isinstance(user, dict) else (user.id if user else "")
     return crud.get_courses(db, user_id=user_id, enrolled_only=enrolled_only)
 
 @router.get("/courses/{course_id}", response_model=schemas.Course)
-def read_course(course_id: str, user_id: str = "u1", db: Session = Depends(get_db)):
+def read_course(course_id: str, user = Depends(security.get_optional_user), db: Session = Depends(get_db)):
     # Security: check if user is enrolled or professor/owner
+    user_id = user['id'] if user and isinstance(user, dict) else (user.id if user else "")
     security.require_course_permission(db, user_id, course_id, allowed_roles=['owner', 'instructor', 'student', 'viewer'])
     
     course = crud.get_course(db, course_id)
@@ -26,25 +28,19 @@ def read_course(course_id: str, user_id: str = "u1", db: Session = Depends(get_d
     return course
 
 @router.post("/courses", response_model=schemas.Course)
-def create_course(data: schemas.CourseCreate, professor_id: str = "p1", db: Session = Depends(get_db)):
-    # Verify the professor exists and has the right role
-    user = crud.get_user(db, professor_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Professor not found")
-    
+def create_course(data: schemas.CourseCreate, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
+    # Verify the user has the right role
     security.require_professor(user)
     
-    course = crud.create_course(db, data, professor_id)
+    uid = user['id'] if isinstance(user, dict) else user.id
+    course = crud.create_course(db, data, uid)
     return course
 
 @router.put("/courses/{course_id}", response_model=schemas.Course)
-def update_course(course_id: str, data: schemas.CourseUpdate, user_id: str = "p1", db: Session = Depends(get_db)):
-    user = crud.get_user(db, user_id)
-    if not user: raise HTTPException(status_code=404, detail="User not found")
-    
-    # Instructors can also update coarse basic info? 
+def update_course(course_id: str, data: schemas.CourseUpdate, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     # Let's say only Owners/Instructors can update.
-    security.require_course_permission(db, user_id, course_id, allowed_roles=['owner', 'instructor'])
+    uid = user['id'] if isinstance(user, dict) else user.id
+    security.require_course_permission(db, uid, course_id, allowed_roles=['owner', 'instructor'])
     
     course = crud.update_course(db, course_id, data)
     if not course:
@@ -52,11 +48,7 @@ def update_course(course_id: str, data: schemas.CourseUpdate, user_id: str = "p1
     return course
 
 @router.delete("/courses/{course_id}")
-def delete_course(course_id: str, user_id: str = None, db: Session = Depends(get_db)):
-    if not user_id: raise HTTPException(status_code=401, detail="User ID required")
-    user = crud.get_user(db, user_id)
-    if not user: raise HTTPException(status_code=404, detail="User not found")
-    
+def delete_course(course_id: str, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     # Only Owners can delete
     security.require_course_owner(db, user, course_id)
     
@@ -143,19 +135,18 @@ def delete_topic(topic_id: str, db: Session = Depends(get_db)):
     return {"message": "Topic deleted"}
 
 @router.post("/topics/{topic_id}/complete")
-def complete_topic(topic_id: str, user_id: str = "u1", db: Session = Depends(get_db)):
+def complete_topic(topic_id: str, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     # Verify user is a student
-    user = crud.get_user(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.role != "student":
+    role = user['role'] if isinstance(user, dict) else user.role
+    if role != "student":
         raise HTTPException(status_code=403, detail="Only students can complete topics")
     
-    crud.mark_topic_completed(db, user_id=user_id, topic_id=topic_id)
+    uid = user['id'] if isinstance(user, dict) else user.id
+    crud.mark_topic_completed(db, user_id=uid, topic_id=topic_id)
     
     topic = crud.get_topic(db, topic_id)
     crud.create_notification(db, schemas.NotificationCreate(
-        user_id=user_id,
+        user_id=uid,
         title="Topic Completed!",
         message=f"Congratulations! You've successfully completed the topic: {topic.title if topic else 'Unknown'}.",
         type="success",

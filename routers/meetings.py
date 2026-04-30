@@ -7,14 +7,13 @@ import crud
 import schemas
 import models
 from database import get_db
+import security
 
 router = APIRouter(prefix="/api/meetings", tags=["Meetings"])
 
 @router.post("", response_model=schemas.MeetingRequestOut)
-def create_meeting(data: schemas.MeetingRequestCreate, user_id: str = None, db: Session = Depends(get_db)):
-    # In a real app, user_id would come from a JWT token. 
-    # For this mock, we'll allow it as a param or default to u1.
-    uid = user_id or "u1"
+def create_meeting(data: schemas.MeetingRequestCreate, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
+    uid = user['id'] if isinstance(user, dict) else user.id
     meeting = crud.create_meeting_request(db, uid, data)
     
     user = crud.get_user(db, meeting.user_id)
@@ -36,13 +35,15 @@ def create_meeting(data: schemas.MeetingRequestCreate, user_id: str = None, db: 
         slot=meeting.slot,
         status=meeting.status,
         date=meeting.date,
+        note=meeting.note,
+        meeting_type=meeting.meeting_type,
         user_name=user['name'] if user else "Unknown",
         professor_name=professor['name'] if professor else "Unknown"
     )
 
 @router.get("", response_model=List[schemas.MeetingRequestOut])
-def get_meetings(user_id: str = None, db: Session = Depends(get_db)):
-    uid = user_id or "u1"
+def get_meetings(user = Depends(security.get_current_user), db: Session = Depends(get_db)):
+    uid = user['id'] if isinstance(user, dict) else user.id
     meetings = crud.get_meeting_requests(db, uid)
     result = []
     for m in meetings:
@@ -55,6 +56,8 @@ def get_meetings(user_id: str = None, db: Session = Depends(get_db)):
             slot=m.slot,
             status=m.status,
             date=m.date,
+            note=m.note,
+            meeting_type=m.meeting_type,
             user_name=user['name'] if user else "Unknown",
             professor_name=professor['name'] if professor else "Unknown"
         ))
@@ -85,6 +88,8 @@ def update_meeting_status(meeting_id: str, status: str, db: Session = Depends(ge
         slot=meeting.slot,
         status=meeting.status,
         date=meeting.date,
+        note=meeting.note,
+        meeting_type=meeting.meeting_type,
         user_name=user['name'] if user else "Unknown",
         professor_name=professor['name'] if professor else "Unknown"
     )

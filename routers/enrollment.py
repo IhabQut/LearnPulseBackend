@@ -52,14 +52,11 @@ class RequestJoinData(BaseModel):
     course_id: str
 
 @router.post("/request")
-def request_join(data: schemas.EnrollRequest, user_id: str = "u1", db: Session = Depends(get_db)):
+def request_join(data: RequestJoinData, db: Session = Depends(get_db)):
     """User requests to join a course (as student or viewer)."""
-    user = crud.get_user(db, user_id)
+    user = crud.get_user(db, data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Students can be viewers; professors can be viewers in others' courses
-    # We allow the request but filter logic in the approval/request itself if needed
     
     course = crud.get_course(db, data.course_id)
     if not course:
@@ -69,18 +66,20 @@ def request_join(data: schemas.EnrollRequest, user_id: str = "u1", db: Session =
         raise HTTPException(status_code=400, detail="This course is not accepting enrollment requests")
     
     # Check for existing
-    role_in_course = security.get_course_role(db, user_id, data.course_id)
+    role_in_course = security.get_course_role(db, data.user_id, data.course_id)
     if role_in_course:
         raise HTTPException(status_code=400, detail=f"You already have a role in this course: {role_in_course}")
     
-    enrollment = crud.request_enrollment(db, user_id, data.course_id, data.role)
+    # For now, default role to 'student' if not specified in future schemas, 
+    # but here we just use 'student' as default for requests
+    enrollment = crud.request_enrollment(db, data.user_id, data.course_id, "student")
     
     # Notify owner
-    if course.professor_id: # Note: crud.get_course currently maps owner_id to professor_id for schema compatibility
+    if course.professor_id:
         crud.create_notification(db, schemas.NotificationCreate(
             user_id=course.professor_id,
             title="New Enrollment Request",
-            message=f"{user['name']} has requested to join your course as {data.role}.",
+            message=f"{user['name']} has requested to join your course.",
             type="info",
             date=datetime.now().strftime("%Y-%m-%d %H:%M")
         ))
@@ -94,14 +93,13 @@ def get_my_status(user_id: str, db: Session = Depends(get_db)):
     return {e.course_id: e.status for e in enrollments}
 
 @router.post("/{enrollment_id}/approve")
-def approve_enrollment(enrollment_id: str, professor_id: str = "p1", db: Session = Depends(get_db)):
+def approve_enrollment(enrollment_id: str, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     """Professor approves enrollment request."""
     enrollment = db.execute(text("SELECT * FROM enrollments WHERE id=:id"), {"id": enrollment_id}).fetchone()
     if not enrollment:
         raise HTTPException(status_code=404, detail="Enrollment not found")
     
     # Security: Must be course owner
-    user = crud.get_user(db, professor_id)
     security.require_course_owner(db, user, enrollment.course_id)
     
     result = crud.approve_enrollment(db, enrollment_id)
@@ -119,10 +117,9 @@ def approve_enrollment(enrollment_id: str, professor_id: str = "p1", db: Session
     return {"message": "Enrollment approved"}
 
 @router.post("/courses/{course_id}/enroll-student")
-def enroll_student(course_id: str, data: schemas.EnrollStudentRequest, professor_id: str = "p1", db: Session = Depends(get_db)):
+def enroll_student(course_id: str, data: schemas.EnrollStudentRequest, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     """Professor directly enrolls a user with a specific role."""
-    owner = crud.get_user(db, professor_id)
-    security.require_course_owner(db, owner, course_id)
+    security.require_course_owner(db, user, course_id)
     
     user = crud.get_user(db, data.user_id)
     if not user:
@@ -143,10 +140,9 @@ def enroll_student(course_id: str, data: schemas.EnrollStudentRequest, professor
     return {"message": f"User {user['name']} enrolled as {data.role}", "id": enrollment.id}
 
 @router.delete("/courses/{course_id}/students/{student_id}")
-def unenroll_student(course_id: str, student_id: str, professor_id: str = "p1", db: Session = Depends(get_db)):
+def unenroll_student(course_id: str, student_id: str, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     """Professor removes a user from a course."""
-    owner = crud.get_user(db, professor_id)
-    security.require_course_owner(db, owner, course_id)
+    security.require_course_owner(db, user, course_id)
     
     existing = db.execute(
         text("SELECT * FROM enrollments WHERE course_id=:cid AND user_id=:uid"),
@@ -165,13 +161,13 @@ class UpdateRoleRequest(BaseModel):
     role: str
 
 @router.patch("/{enrollment_id}/role")
-def update_role(enrollment_id: str, data: UpdateRoleRequest, professor_id: str = "p1", db: Session = Depends(get_db)):
+def update_role(enrollment_id: str, data: UpdateRoleRequest, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     """Update a user's role in a course (Owner/Instructor with limits)."""
     enrollment = db.execute(text("SELECT course_id FROM enrollments WHERE id=:id"), {"id": enrollment_id}).fetchone()
     if not enrollment:
         raise HTTPException(status_code=404, detail="Enrollment not found")
     
-    security.can_manage_role(db, professor_id, enrollment_id, enrollment.course_id)
+    security.can_manage_role(db, user['id'] if isinstance(user, dict) else user.id, enrollment_id, enrollment.course_id)
     
     crud.update_enrollment_role(db, enrollment_id, data.role)
     return {"message": "Role updated", "role": data.role}

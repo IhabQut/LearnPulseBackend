@@ -50,7 +50,7 @@ def register(request: schemas.RegisterRequest, db: Session = Depends(get_db)):
         ), {"id": user_id})
     else:
         db.execute(text(
-            "INSERT INTO students (id, points, major, level, gpa) VALUES (:id, 0, '', 'Undergraduate', 0.0)"
+            "INSERT INTO students (id, major, level, gpa) VALUES (:id, '', 'Undergraduate', 0.0)"
         ), {"id": user_id})
 
     db.commit()
