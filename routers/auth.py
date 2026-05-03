@@ -17,21 +17,25 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
 @router.post("/register", response_model=schemas.TokenResponse)
 def register(request: schemas.RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user with email and password."""
+    logger.info(f"Checking existing user for email: {request.email}")
     # Check if email already exists
     existing = db.execute(
         text("SELECT id FROM users WHERE email=:email"),
         {"email": request.email}
     ).fetchone()
     if existing:
+        logger.info(f"User already exists: {request.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email already exists."
         )
 
     # Create user
+    logger.info(f"Creating user ID and hashing password")
     user_id = f"{'u' if request.role == 'student' else 'p'}_{uuid.uuid4().hex[:8]}"
     hashed_pw = hash_password(request.password)
 
+    logger.info(f"Inserting into users table")
     db.execute(text(
         "INSERT INTO users (id, name, role, email, password_hash, phone_number, bio) "
         "VALUES (:id, :name, :role, :email, :pw, '', '')"
@@ -44,6 +48,7 @@ def register(request: schemas.RegisterRequest, db: Session = Depends(get_db)):
     })
 
     # Create specialized profile
+    logger.info(f"Creating specialized profile for role: {request.role}")
     if request.role == "professor":
         db.execute(text(
             "INSERT INTO professors (id, department, expertise, academic_rank) VALUES (:id, '', '', '')"
@@ -53,13 +58,17 @@ def register(request: schemas.RegisterRequest, db: Session = Depends(get_db)):
             "INSERT INTO students (id, major, level, gpa) VALUES (:id, '', 'Undergraduate', 0.0)"
         ), {"id": user_id})
 
+    logger.info(f"Committing transaction")
     db.commit()
 
     # Generate token
+    logger.info(f"Generating access token")
     token = create_access_token(user_id)
+    
+    logger.info(f"Fetching full user data")
     user_data = crud.get_user(db, user_id)
 
-    logger.info(f"New user registered: {request.email} as {request.role}")
+    logger.info(f"New user registered successfully: {request.email}")
     return {"access_token": token, "token_type": "bearer", "user": user_data}
 
 
