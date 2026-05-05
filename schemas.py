@@ -165,6 +165,7 @@ class TopicBase(BaseModel):
 class Topic(TopicBase):
     completed: bool = False
     order: int = 0
+    is_open: bool = False
 
     class Config:
         from_attributes = True
@@ -176,6 +177,7 @@ class TopicCreate(BaseModel):
 class TopicUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    is_open: Optional[bool] = None
 
 class ChapterBase(BaseModel):
     id: str
@@ -184,6 +186,7 @@ class ChapterBase(BaseModel):
 
 class Chapter(ChapterBase):
     topics: List[Topic] = []
+    is_final_quiz_open: bool = False
 
     class Config:
         from_attributes = True
@@ -195,6 +198,7 @@ class ChapterCreate(BaseModel):
 class ChapterUpdate(BaseModel):
     title: Optional[str] = None
     summary: Optional[str] = None
+    is_final_quiz_open: Optional[bool] = None
 
 class CourseBase(BaseModel):
     id: str
@@ -414,6 +418,11 @@ class StudentAnalyticsOut(BaseModel):
     overall_progress: float = 0.0
 
 # ─── AI Course Builder ───────────────────────────────────────
+
+class CourseTextbookCreate(BaseModel):
+    filename: str
+    file_type: str
+    status: str = "done"
 
 class DraftTopic(BaseModel):
     title: str

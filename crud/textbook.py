@@ -3,6 +3,14 @@ from sqlalchemy import text
 import uuid
 
 
+def save_course_textbook(db: Session, course_id: str, data: dict):
+    tid = f"tx{uuid.uuid4().hex[:8]}"
+    db.execute(
+        text("INSERT INTO course_textbooks (id, course_id, filename, file_type, status) VALUES (:id, :cid, :fname, :ftype, :st)"),
+        {"id": tid, "cid": course_id, "fname": data.get("filename", ""), "ftype": data.get("file_type", ""), "st": data.get("status", "done")}
+    )
+    db.commit()
+
 def bulk_save_chapters(db: Session, course_id: str, chapters: list):
     """Delete all existing chapters/topics for a course then re-insert from list."""
     # Delete existing topics first (FK constraint)

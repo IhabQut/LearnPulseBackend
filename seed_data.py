@@ -30,20 +30,17 @@ def seed():
     hashed_pw = hash_password("password123")
 
     # 2. Users (Professors and Students)
-    # IDs: prof_1, prof_2, student_1, student_2, student_3
+    # IDs: prof_1, prof_2, student_1, student_2
     users = [
-        ("prof_1", "Dr. Sarah Miller", "professor", "sarah@univ.edu", hashed_pw, "+1-555-0101", "Expert in Database Systems and Big Data architecture."),
-        ("prof_2", "Prof. James Chen", "professor", "james@univ.edu", hashed_pw, "+1-555-0102", "Deep Learning researcher with a focus on Computer Vision."),
-        ("student_1", "Amina Al-Farsi", "student", "amina@student.edu", hashed_pw, "+1-555-0201", "Aspiring Data Scientist, currently in her junior year."),
-        ("student_2", "Lucas Dubois", "student", "lucas@student.edu", hashed_pw, "+1-555-0202", "Senior Software Engineering student focusing on cloud native apps."),
-        ("student_3", "Yuki Tanaka", "student", "yuki@student.edu", hashed_pw, "+1-555-0203", "Sophomore interested in UI/UX and Human-Computer Interaction.")
+        ("prof_1", "Dr.Rushdi hamamreh", "professor", "rushdi@univ.edu", hashed_pw, "+1-555-0101", "Expert in Database Systems and Big Data architecture."),
+        ("student_1", "ihab qutmera", "student", "ihab@student.edu", hashed_pw, "+1-555-0201", "Aspiring Data Scientist, currently in her junior year."),
+        ("student_2", "noor tamimi", "student", "noor@student.edu", hashed_pw, "+1-555-0202", "Senior Software Engineering student focusing on cloud native apps."),
     ]
     c.executemany("INSERT INTO users VALUES (?,?,?,?,?,?,?)", users)
 
     # 3. Professor Profiles
     prof_profiles = [
-        ("prof_1", "Computer Science", "Database Systems", "Associate Professor", "Engineering Bldg, Room 304", "https://zoom.us/sarah-miller", 1, 1),
-        ("prof_2", "Artificial Intelligence", "Neural Networks", "Senior Lecturer", "Tech Hub, Room 412", "https://zoom.us/james-chen", 1, 0)
+        ("prof_1", "Computer Science", "Database Systems", "Associate Professor", "Engineering Bldg, Room 304", "https://zoom.us/rushdi", 1, 1),
     ]
     c.executemany("INSERT INTO professors VALUES (?,?,?,?,?,?,?,?)", prof_profiles)
 
@@ -51,7 +48,6 @@ def seed():
     student_profiles = [
         ("student_1", "Data Science", "Undergraduate", 3.9, 2026),
         ("student_2", "Software Engineering", "Undergraduate", 3.7, 2025),
-        ("student_3", "Computer Science", "Undergraduate", 3.5, 2027)
     ]
     c.executemany("INSERT INTO students VALUES (?,?,?,?,?)", student_profiles)
 
@@ -59,15 +55,12 @@ def seed():
     office_hours = [
         (str(uuid.uuid4()), "prof_1", "Monday", "10:00 AM - 12:00 PM"),
         (str(uuid.uuid4()), "prof_1", "Wednesday", "2:00 PM - 4:00 PM"),
-        (str(uuid.uuid4()), "prof_2", "Tuesday", "1:00 PM - 3:00 PM"),
-        (str(uuid.uuid4()), "prof_2", "Thursday", "9:00 AM - 11:00 AM")
     ]
     c.executemany("INSERT INTO user_office_hours VALUES (?,?,?,?)", office_hours)
 
     # 6. Courses
     courses = [
         ("course_db", "Advanced Database Systems", "Deep dive into SQL, NoSQL, and query optimization.", "Computer Science", "https://images.unsplash.com/photo-1544383335-c533c44eba31", "prof_1", 1),
-        ("course_ai", "Introduction to AI", "Foundational concepts of Machine Learning and search algorithms.", "Artificial Intelligence", "https://images.unsplash.com/photo-1485827404703-89b55fcc595e", "prof_2", 1)
     ]
     c.executemany("INSERT INTO courses VALUES (?,?,?,?,?,?,?)", courses)
 
@@ -77,39 +70,23 @@ def seed():
         ("en_1", "prof_1", "course_db", "approved", "owner", "2024-01-01", 0),
         ("en_2", "student_1", "course_db", "approved", "student", "2024-01-05", 150),
         ("en_3", "student_2", "course_db", "approved", "student", "2024-01-06", 80),
-        ("en_4", "prof_2", "course_ai", "approved", "owner", "2024-01-02", 0),
-        ("en_5", "student_1", "course_ai", "approved", "student", "2024-01-07", 200),
-        ("en_6", "student_3", "course_ai", "approved", "student", "2024-01-08", 45),
-        ("en_7", "prof_1", "course_ai", "approved", "viewer", "2024-01-10", 0)
     ]
     c.executemany("INSERT INTO enrollments VALUES (?,?,?,?,?,?,?)", enrollments)
 
     # 8. Content Hierarchy (Chapters -> Topics)
     # DB Course
     chapters_db = [
-        ("ch_db_1", "Query Processing", "Understanding how engines execute SQL.", "course_db"),
-        ("ch_db_2", "Transaction Management", "ACID properties and concurrency control.", "course_db")
+        ("ch_db_1", "Query Processing", "Understanding how engines execute SQL.", "course_db", 0),
+        ("ch_db_2", "Transaction Management", "ACID properties and concurrency control.", "course_db", 0)
     ]
-    c.executemany("INSERT INTO chapters VALUES (?,?,?,?)", chapters_db)
+    c.executemany("INSERT INTO chapters VALUES (?,?,?,?,?)", chapters_db)
 
     topics_db = [
-        ("top_db_1", "Parsing and Translation", "Converting SQL to relational algebra.", "ch_db_1", 1),
-        ("top_db_2", "Optimization", "Cost-based optimization strategies.", "ch_db_1", 2),
-        ("top_db_3", "Locking Protocols", "Two-phase locking and deadlocks.", "ch_db_2", 1)
+        ("top_db_1", "Parsing and Translation", "Converting SQL to relational algebra.", "ch_db_1", 1, 1),
+        ("top_db_2", "Optimization", "Cost-based optimization strategies.", "ch_db_1", 2, 0),
+        ("top_db_3", "Locking Protocols", "Two-phase locking and deadlocks.", "ch_db_2", 1, 0)
     ]
-    c.executemany("INSERT INTO topics VALUES (?,?,?,?,?)", topics_db)
-
-    # AI Course
-    chapters_ai = [
-        ("ch_ai_1", "Heuristic Search", "A* algorithm and state space search.", "course_ai")
-    ]
-    c.executemany("INSERT INTO chapters VALUES (?,?,?,?)", chapters_ai)
-
-    topics_ai = [
-        ("top_ai_1", "Introduction to Heuristics", "What makes a heuristic admissible?", "ch_ai_1", 1),
-        ("top_ai_2", "A* Search Implementation", "Step-by-step walkthrough of A*.", "ch_ai_1", 2)
-    ]
-    c.executemany("INSERT INTO topics VALUES (?,?,?,?,?)", topics_ai)
+    c.executemany("INSERT INTO topics VALUES (?,?,?,?,?,?)", topics_db)
 
     # 9. Topic Completions
     completions = [
@@ -129,14 +106,14 @@ def seed():
 
     # 11. Discussions and Replies
     discussions = [
-        ("disc_1", "Amina Al-Farsi", "student_1", "Locking vs Versioning", "When should we use MVCC instead of strict 2PL?", "2024-04-30 10:00", "course_db", "ch_db_2", "top_db_3"),
-        ("disc_2", "Lucas Dubois", "student_2", "Cost Estimation", "How does the optimizer handle skewed data distribution?", "2024-04-30 11:30", "course_db", "ch_db_1", "top_db_2")
+        ("disc_1", "ihab qutmera", "student_1", "Locking vs Versioning", "When should we use MVCC instead of strict 2PL?", "2024-04-30 10:00", "course_db", "ch_db_2", "top_db_3"),
+        ("disc_2", "noor tamimi", "student_2", "Cost Estimation", "How does the optimizer handle skewed data distribution?", "2024-04-30 11:30", "course_db", "ch_db_1", "top_db_2")
     ]
     c.executemany("INSERT INTO discussions VALUES (?,?,?,?,?,?,?,?,?)", discussions)
 
     replies = [
-        ("rep_1", "Dr. Sarah Miller", "prof_1", "Great question! MVCC is preferred in read-heavy systems as it prevents readers from blocking writers.", "2024-04-30 10:45", "professor", "disc_1"),
-        ("rep_2", "Amina Al-Farsi", "student_1", "Thanks Prof! That makes sense for Postgres especially.", "2024-04-30 11:00", "student", "disc_1")
+        ("rep_1", "Dr. Rushdi hamamreh", "prof_1", "Great question! MVCC is preferred in read-heavy systems as it prevents readers from blocking writers.", "2024-04-30 10:45", "professor", "disc_1"),
+        ("rep_2", "ihab qutmera", "student_1", "Thanks Prof! That makes sense for Postgres especially.", "2024-04-30 11:00", "student", "disc_1")
     ]
     c.executemany("INSERT INTO replies VALUES (?,?,?,?,?,?,?)", replies)
 
@@ -162,10 +139,10 @@ def seed():
 
     # 13. Quiz Attempts
     attempts = [
-        ("att_1", "student_1", "qz_db_1", 2, 2, "2024-04-29", 1),
-        ("att_2", "student_2", "qz_db_1", 1, 2, "2024-04-29", 1)
+        ("att_1", "student_1", "qz_db_1", 2, 2, "2024-04-29", 1, 10),
+        ("att_2", "student_2", "qz_db_1", 1, 2, "2024-04-29", 1, 5)
     ]
-    c.executemany("INSERT INTO quiz_attempts VALUES (?,?,?,?,?,?,?)", attempts)
+    c.executemany("INSERT INTO quiz_attempts VALUES (?,?,?,?,?,?,?,?)", attempts)
 
     # 14. Meeting Requests
     meetings = [

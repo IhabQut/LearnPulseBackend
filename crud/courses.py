@@ -17,8 +17,8 @@ def get_courses(db: Session, user_id: str = "", enrolled_only: bool = False) -> 
             CASE WHEN c.is_open IS NULL THEN 1 ELSE c.is_open END AS course_is_open,
             u.name AS professor_name,
             (SELECT COUNT(*) FROM enrollments e2 WHERE e2.course_id = c.id AND e2.status = 'approved') AS student_count,
-            ch.id AS chapter_id, ch.title AS chapter_title, ch.summary AS chapter_summary,
-            t.id AS topic_id, t.title AS topic_title, t.description AS topic_desc, t.`order` AS topic_order,
+            ch.id AS chapter_id, ch.title AS chapter_title, ch.summary AS chapter_summary, COALESCE(ch.is_final_quiz_open, 0) AS chapter_is_final_quiz_open,
+            t.id AS topic_id, t.title AS topic_title, t.description AS topic_desc, t.`order` AS topic_order, COALESCE(t.is_open, 0) AS topic_is_open,
             tc.user_id AS completed_by,
             m.id AS mat_id, m.name AS mat_name, m.type AS mat_type, m.url AS mat_url
         FROM courses c
@@ -60,7 +60,8 @@ def get_courses(db: Session, user_id: str = "", enrolled_only: bool = False) -> 
             chid = r.chapter_id
             if chid not in c_obj["chapters_dict"]:
                 c_obj["chapters_dict"][chid] = {
-                    "id": chid, "title": r.chapter_title, "summary": r.chapter_summary, "topics_dict": {}
+                    "id": chid, "title": r.chapter_title, "summary": r.chapter_summary, 
+                    "is_final_quiz_open": bool(r.chapter_is_final_quiz_open), "topics_dict": {}
                 }
             ch_obj = c_obj["chapters_dict"][chid]
             
@@ -69,7 +70,8 @@ def get_courses(db: Session, user_id: str = "", enrolled_only: bool = False) -> 
                 if tid not in ch_obj["topics_dict"]:
                     ch_obj["topics_dict"][tid] = {
                         "id": tid, "title": r.topic_title, "description": r.topic_desc, 
-                        "order": r.topic_order, "completed": (r.completed_by is not None)
+                        "order": r.topic_order, "completed": (r.completed_by is not None),
+                        "is_open": bool(r.topic_is_open)
                     }
 
     result = []
@@ -80,7 +82,8 @@ def get_courses(db: Session, user_id: str = "", enrolled_only: bool = False) -> 
             topics_list = list(chdata.get("topics_dict", {}).values())
             topics_list.sort(key=lambda x: x["order"])
             chapters.append({
-                "id": chdata["id"], "title": chdata["title"], "summary": chdata["summary"], "topics": topics_list
+                "id": chdata["id"], "title": chdata["title"], "summary": chdata["summary"],
+                "is_final_quiz_open": chdata["is_final_quiz_open"], "topics": topics_list
             })
         
         result.append(schemas.Course.model_validate({

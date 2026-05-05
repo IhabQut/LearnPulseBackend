@@ -91,6 +91,7 @@ class Chapter(Base):
     title = Column(String, index=True)
     summary = Column(Text)
     course_id = Column(String, ForeignKey("courses.id"))
+    is_final_quiz_open = Column(Boolean, default=False)
 
     course = relationship("Course", back_populates="chapters")
     topics = relationship("Topic", back_populates="chapter", cascade="all, delete-orphan")
@@ -104,6 +105,7 @@ class Topic(Base):
     description = Column(Text)
     chapter_id = Column(String, ForeignKey("chapters.id"))
     order = Column(Integer, default=0)
+    is_open = Column(Boolean, default=False)
 
     chapter = relationship("Chapter", back_populates="topics")
     completions = relationship("TopicCompletion", back_populates="topic")
@@ -209,6 +211,7 @@ class QuizAttempt(Base):
     total = Column(Integer)
     date = Column(String)
     is_first_attempt = Column(Boolean, default=True)
+    points_awarded = Column(Integer, default=0)
 
     user = relationship("User")
     quiz = relationship("Quiz", back_populates="attempts")

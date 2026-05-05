@@ -17,6 +17,8 @@ def update_chapter(db: Session, chapter_id: str, data: schemas.ChapterUpdate):
         updates.append("title = :t"); params["t"] = data.title
     if data.summary is not None:
         updates.append("summary = :s"); params["s"] = data.summary
+    if hasattr(data, 'is_final_quiz_open') and data.is_final_quiz_open is not None:
+        updates.append("is_final_quiz_open = :ifo"); params["ifo"] = 1 if data.is_final_quiz_open else 0
     if updates:
         db.execute(text(f"UPDATE chapters SET {', '.join(updates)} WHERE id=:id"), params)
         db.commit()
@@ -45,6 +47,8 @@ def update_topic(db: Session, topic_id: str, data: schemas.TopicUpdate):
         updates.append("title = :t"); params["t"] = data.title
     if data.description is not None:
         updates.append("description = :d"); params["d"] = data.description
+    if hasattr(data, 'is_open') and data.is_open is not None:
+        updates.append("is_open = :io"); params["io"] = 1 if data.is_open else 0
     if updates:
         db.execute(text(f"UPDATE topics SET {', '.join(updates)} WHERE id=:id"), params)
         db.commit()

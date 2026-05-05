@@ -9,6 +9,14 @@ from database import get_db
 router = APIRouter(prefix="/api", tags=["Course Builder"])
 
 
+# ─── Textbook ────────────────────────────────────────────────────
+
+@router.post("/courses/{course_id}/textbook")
+def save_textbook(course_id: str, data: schemas.CourseTextbookCreate, db: Session = Depends(get_db)):
+    crud.save_course_textbook(db, course_id, data.model_dump())
+    return {"message": "Textbook saved"}
+
+
 # ─── Chapters (bulk) ─────────────────────────────────────────────
 
 @router.post("/courses/{course_id}/chapters/bulk")

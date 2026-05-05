@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS chapters (
     id TEXT PRIMARY KEY,
     title TEXT,
     summary TEXT,
-    course_id TEXT REFERENCES courses(id) ON DELETE CASCADE
+    course_id TEXT REFERENCES courses(id) ON DELETE CASCADE,
+    is_final_quiz_open BOOLEAN DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS topics (
@@ -72,7 +73,8 @@ CREATE TABLE IF NOT EXISTS topics (
     title TEXT,
     description TEXT,
     chapter_id TEXT REFERENCES chapters(id) ON DELETE CASCADE,
-    "order" INTEGER DEFAULT 0
+    "order" INTEGER DEFAULT 0,
+    is_open BOOLEAN DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS topic_completions (
@@ -146,7 +148,8 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
     score INTEGER,
     total INTEGER,
     date TEXT,
-    is_first_attempt BOOLEAN DEFAULT 1
+    is_first_attempt BOOLEAN DEFAULT 1,
+    points_awarded INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS enrollments (

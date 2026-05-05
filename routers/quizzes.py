@@ -89,12 +89,14 @@ def submit_quiz(quiz_id: str, submission: QuizSubmission, db: Session = Depends(
     is_first = prior is None
     import uuid
     aid = str(uuid.uuid4())
-    db.execute(text("INSERT INTO quiz_attempts (id, user_id, quiz_id, score, total, date, is_first_attempt) VALUES (:id, :u, :q, :s, :t, 'Just now', :f)"),
-               {"id": aid, "u": submission.user_id, "q": quiz_id, "s": score, "t": len(qz.questions), "f": is_first})
-    db.commit()
     pts = 0
     if is_first:
         pts = score * 5
+
+    db.execute(text("INSERT INTO quiz_attempts (id, user_id, quiz_id, score, total, date, is_first_attempt, points_awarded) VALUES (:id, :u, :q, :s, :t, 'Just now', :f, :p)"),
+               {"id": aid, "u": submission.user_id, "q": quiz_id, "s": score, "t": len(qz.questions), "f": is_first, "p": pts})
+    
+    if is_first and pts > 0:
         course_id = db.execute(text("""
             SELECT ch.course_id FROM quizzes q
             LEFT JOIN topics t ON t.id = q.topic_id
@@ -104,6 +106,8 @@ def submit_quiz(quiz_id: str, submission: QuizSubmission, db: Session = Depends(
         if course_id:
             import crud.users as _users
             _users.award_course_points(db, submission.user_id, course_id, pts)
+            
+    db.commit()
     return schemas.QuizAttemptOut(
         id=aid, user_id=submission.user_id, quiz_id=quiz_id, score=score, total=len(qz.questions),
         date="Just now", is_first_attempt=is_first, points_awarded=pts

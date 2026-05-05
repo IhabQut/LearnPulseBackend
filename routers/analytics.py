@@ -31,7 +31,11 @@ def get_course_analytics(course_id: str, db: Session = Depends(get_db)):
     c = db.execute(text("SELECT title FROM courses WHERE id=:id"), {"id": course_id}).fetchone()
     if not c: return schemas.AIReport(course_title="Unknown", total_students=0, insight="Course not found.")
 
-    enrolled = db.execute(text("SELECT user_id FROM enrollments WHERE course_id=:cid AND status='approved'"), {"cid": course_id}).fetchall()
+    enrolled = db.execute(text("""
+        SELECT e.user_id FROM enrollments e
+        JOIN users u ON u.id = e.user_id
+        WHERE e.course_id=:cid AND e.status='approved' AND u.role='student'
+    """), {"cid": course_id}).fetchall()
     enrolled_ids = [e.user_id for e in enrolled]
     
     if not enrolled_ids:

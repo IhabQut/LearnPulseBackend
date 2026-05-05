@@ -61,22 +61,41 @@ def delete_course(course_id: str, user = Depends(security.get_current_user), db:
 def get_course_students(course_id: str, db: Session = Depends(get_db)):
     from sqlalchemy import text
     query = text("""
-        SELECT u.id, e.id as enrollment_id, e.role as enrollment_role
-        FROM users u 
-        JOIN enrollments e ON e.user_id = u.id 
+        SELECT
+            u.id,
+            u.name,
+            u.email,
+            u.role AS user_role,
+            e.id AS enrollment_id,
+            e.role AS enrollment_role,
+            COALESCE(e.points, 0) AS points,
+            e.date AS joined_at,
+            (
+                SELECT COUNT(*)
+                FROM topic_completions tc
+                JOIN topics tp ON tp.id = tc.topic_id
+                JOIN chapters ch ON ch.id = tp.chapter_id
+                WHERE tc.user_id = u.id AND ch.course_id = :cid
+            ) AS completed_topics
+        FROM users u
+        JOIN enrollments e ON e.user_id = u.id
         WHERE e.course_id = :cid AND e.status = 'approved'
+        ORDER BY e.date
     """)
     res = db.execute(query, {"cid": course_id}).fetchall()
     results = []
     for row in res:
-        user_data = crud.get_user(db, user_id=row[0])
-        if user_data:
-            # We want to keep the schemas.User structure but add enrollment info
-            # Convert to dict if it's not already
-            u_dict = dict(user_data) if not isinstance(user_data, dict) else user_data
-            u_dict["enrollment_id"] = row[1]
-            u_dict["role"] = row[2] # Course-specific role
-            results.append(u_dict)
+        results.append({
+            "id": row.id,
+            "name": row.name,
+            "email": row.email or "",
+            "role": row.enrollment_role,
+            "user_role": row.user_role,
+            "enrollment_id": row.enrollment_id,
+            "points": row.points if row.points is not None else 0,
+            "completedTopics": row.completed_topics if row.completed_topics is not None else 0,
+            "joinedAt": row.joined_at or "",
+        })
     return results
 
 @router.get("/courses/{course_id}/enrollment-requests", response_model=List[schemas.EnrollmentOut])
@@ -138,8 +157,8 @@ def delete_topic(topic_id: str, db: Session = Depends(get_db)):
 def complete_topic(topic_id: str, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
     # Verify user is a student
     role = user['role'] if isinstance(user, dict) else user.role
-    if role != "student":
-        raise HTTPException(status_code=403, detail="Only students can complete topics")
+    if role not in ("student", "professor"):
+        raise HTTPException(status_code=403, detail="Only enrolled users can complete topics")
     
     uid = user['id'] if isinstance(user, dict) else user.id
     crud.mark_topic_completed(db, user_id=uid, topic_id=topic_id)
