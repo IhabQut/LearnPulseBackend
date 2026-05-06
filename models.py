@@ -72,6 +72,7 @@ class Course(Base):
     discussions = relationship("Discussion", back_populates="course")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
     owner = relationship("User", foreign_keys=[owner_id])
+    syllabus = relationship("CourseSyllabus", back_populates="course", uselist=False, cascade="all, delete-orphan")
 
 class Material(Base):
     __tablename__ = "materials"
@@ -293,7 +294,64 @@ class SemesterWeek(Base):
     course_id = Column(String, ForeignKey("courses.id"))
     week_num = Column(Integer)
     chapter_title = Column(String, default="")
-    topics_json = Column(Text, default="[]")
     notes = Column(String, default="")
 
     course = relationship("Course")
+    topics = relationship("SemesterWeekTopic", back_populates="week", cascade="all, delete-orphan")
+
+class SemesterWeekTopic(Base):
+    __tablename__ = "semester_week_topics"
+
+    id = Column(String, primary_key=True, index=True)
+    week_id = Column(String, ForeignKey("semester_weeks.id"))
+    title = Column(String)
+
+    week = relationship("SemesterWeek", back_populates="topics")
+
+class CourseSyllabus(Base):
+    __tablename__ = "course_syllabi"
+
+    id = Column(String, primary_key=True, index=True)
+    course_id = Column(String, ForeignKey("courses.id"))
+    course_code = Column(String, default="")
+    semester = Column(String, default="")
+    instructor_name = Column(String, default="")
+    instructor_email = Column(String, default="")
+    instructor_phone = Column(String, default="")
+    office_hours = Column(String, default="")
+    class_time_location = Column(String, default="")
+    zoom_link = Column(String, default="")
+    description = Column(Text, default="")
+
+    course = relationship("Course", back_populates="syllabus")
+    objectives = relationship("SyllabusObjective", back_populates="syllabus", cascade="all, delete-orphan")
+    textbooks = relationship("SyllabusTextbook", back_populates="syllabus", cascade="all, delete-orphan")
+    outcomes = relationship("SyllabusOutcome", back_populates="syllabus", cascade="all, delete-orphan")
+
+class SyllabusObjective(Base):
+    __tablename__ = "syllabus_objectives"
+
+    id = Column(String, primary_key=True, index=True)
+    syllabus_id = Column(String, ForeignKey("course_syllabi.id"))
+    text = Column(Text)
+
+    syllabus = relationship("CourseSyllabus", back_populates="objectives")
+
+class SyllabusTextbook(Base):
+    __tablename__ = "syllabus_textbooks"
+
+    id = Column(String, primary_key=True, index=True)
+    syllabus_id = Column(String, ForeignKey("course_syllabi.id"))
+    title = Column(String)
+    author = Column(String, default="")
+
+    syllabus = relationship("CourseSyllabus", back_populates="textbooks")
+
+class SyllabusOutcome(Base):
+    __tablename__ = "syllabus_outcomes"
+
+    id = Column(String, primary_key=True, index=True)
+    syllabus_id = Column(String, ForeignKey("course_syllabi.id"))
+    text = Column(Text)
+
+    syllabus = relationship("CourseSyllabus", back_populates="outcomes")

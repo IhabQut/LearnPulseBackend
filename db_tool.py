@@ -204,10 +204,61 @@ CREATE TABLE IF NOT EXISTS semester_weeks (
     course_id TEXT REFERENCES courses(id) ON DELETE CASCADE,
     week_num INTEGER,
     chapter_title TEXT DEFAULT '',
-    topics_json TEXT DEFAULT '[]',
     notes TEXT DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS semester_week_topics (
+    id TEXT PRIMARY KEY,
+    week_id TEXT REFERENCES semester_weeks(id) ON DELETE CASCADE,
+    title TEXT
+);
+
+CREATE TABLE IF NOT EXISTS course_syllabi (
+    id TEXT PRIMARY KEY,
+    course_id TEXT REFERENCES courses(id) ON DELETE CASCADE,
+    course_code TEXT,
+    semester TEXT,
+    instructor_name TEXT,
+    instructor_email TEXT,
+    instructor_phone TEXT,
+    office_hours TEXT,
+    class_time_location TEXT,
+    zoom_link TEXT,
+    description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS syllabus_objectives (
+    id TEXT PRIMARY KEY,
+    syllabus_id TEXT REFERENCES course_syllabi(id) ON DELETE CASCADE,
+    text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS syllabus_textbooks (
+    id TEXT PRIMARY KEY,
+    syllabus_id TEXT REFERENCES course_syllabi(id) ON DELETE CASCADE,
+    title TEXT,
+    author TEXT
+);
+
+CREATE TABLE IF NOT EXISTS syllabus_outcomes (
+    id TEXT PRIMARY KEY,
+    syllabus_id TEXT REFERENCES course_syllabi(id) ON DELETE CASCADE,
+    text TEXT
+);
 """
+
+def drop_tables():
+    print("Dropping all tables...")
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+    tables = [row[0] for row in c.fetchall()]
+    for table in tables:
+        c.execute(f"DROP TABLE IF EXISTS {table}")
+        print(f"  - {table} dropped.")
+    conn.commit()
+    conn.close()
+    print("Done.")
 
 def clear_data():
     print("Clearing all data from tables...")
@@ -285,9 +336,11 @@ if __name__ == "__main__":
         elif cmd == "--seed":
             seed()
         elif cmd == "--rebuild":
-            delete_db()
+            drop_tables()
             create_schema()
             seed()
+        elif cmd == "--drop":
+            drop_tables()
         else:
             print(f"Unknown command: {cmd}")
     else:

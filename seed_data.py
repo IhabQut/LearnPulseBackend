@@ -22,7 +22,9 @@ def seed():
         "materials", "chapters", "topics", "topic_completions", "discussions", 
         "replies", "discussion_votes", "reply_votes", "quizzes", "quiz_questions", 
         "quiz_options", "quiz_attempts", "enrollments", "meeting_requests", 
-        "notifications", "course_textbooks", "grading_components", "semester_weeks"
+        "notifications", "course_textbooks", "grading_components", "semester_weeks",
+        "semester_week_topics", "course_syllabi", "syllabus_objectives", 
+        "syllabus_textbooks", "syllabus_outcomes"
     ]
     for table in tables:
         c.execute(f"DELETE FROM {table}")
@@ -174,10 +176,40 @@ def seed():
     c.executemany("INSERT INTO grading_components VALUES (?,?,?,?,?)", grading)
 
     weeks = [
-        ("wk_1", "course_db", 1, "Introduction and Query Processing", '["SQL Basics", "Query Trees", "Parsing"]', "Read Chapter 1 before class."),
-        ("wk_2", "course_db", 2, "Optimization and Indexing", '["B+ Trees", "Cost Estimation", "Plan selection"]', "Lab 1 due on Friday.")
+        ("wk_1", "course_db", 1, "Introduction and Query Processing", "Read Chapter 1 before class."),
+        ("wk_2", "course_db", 2, "Optimization and Indexing", "Lab 1 due on Friday.")
     ]
-    c.executemany("INSERT INTO semester_weeks VALUES (?,?,?,?,?,?)", weeks)
+    c.executemany("INSERT INTO semester_weeks VALUES (?,?,?,?,?)", weeks)
+
+    week_topics = [
+        (str(uuid.uuid4()), "wk_1", "SQL Basics"),
+        (str(uuid.uuid4()), "wk_1", "Query Trees"),
+        (str(uuid.uuid4()), "wk_1", "Parsing"),
+        (str(uuid.uuid4()), "wk_2", "B+ Trees"),
+        (str(uuid.uuid4()), "wk_2", "Cost Estimation"),
+    ]
+    c.executemany("INSERT INTO semester_week_topics VALUES (?,?,?)", week_topics)
+
+    syllabi = [
+        ("syl_db", "course_db", "CS401", "Spring 2024", "Dr. Rushdi hamamreh", "rushdi@univ.edu", "+1-555-0101", "Mon/Wed 10-12", "Engineering Room 304", "https://zoom.us/j/123456789", "Advanced DB concepts syllabus.")
+    ]
+    c.executemany("INSERT INTO course_syllabi VALUES (?,?,?,?,?,?,?,?,?,?,?)", syllabi)
+
+    syll_objs = [
+        (str(uuid.uuid4()), "syl_db", "Master SQL query optimization"),
+        (str(uuid.uuid4()), "syl_db", "Understand NoSQL distributed architectures"),
+    ]
+    c.executemany("INSERT INTO syllabus_objectives VALUES (?,?,?)", syll_objs)
+
+    syll_txts = [
+        (str(uuid.uuid4()), "syl_db", "Database System Concepts", "Silberschatz"),
+    ]
+    c.executemany("INSERT INTO syllabus_textbooks VALUES (?,?,?,?)", syll_txts)
+
+    syll_outs = [
+        (str(uuid.uuid4()), "syl_db", "Implement a functional database engine prototype"),
+    ]
+    c.executemany("INSERT INTO syllabus_outcomes VALUES (?,?,?)", syll_outs)
 
     conn.commit()
     conn.close()

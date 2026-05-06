@@ -219,6 +219,63 @@ class CourseUpdate(BaseModel):
     category: Optional[str] = None
     image: Optional[str] = None
 
+class ObjectiveSchema(BaseModel):
+    text: str
+
+class TextbookSchema(BaseModel):
+    title: str
+    author: Optional[str] = ""
+
+class OutcomeSchema(BaseModel):
+    text: str
+
+class WeekTopicSchema(BaseModel):
+    title: str
+
+class CourseSyllabusBase(BaseModel):
+    course_code: str = ""
+    semester: str = ""
+    instructor_name: str = ""
+    instructor_email: str = ""
+    instructor_phone: str = ""
+    office_hours: str = ""
+    class_time_location: str = ""
+    zoom_link: Optional[str] = ""
+    description: str = ""
+    objectives: List[ObjectiveSchema] = []
+    textbooks: List[TextbookSchema] = []
+    learning_outcomes: List[OutcomeSchema] = []
+
+class CourseSyllabusCreate(CourseSyllabusBase):
+    pass
+
+class CourseSyllabus(CourseSyllabusBase):
+    id: str
+    course_id: str
+
+    class Config:
+        from_attributes = True
+
+class SemesterWeekCreate(BaseModel):
+    week_num: int
+    chapter_title: str = ""
+    topics: List[WeekTopicSchema] = []
+    notes: str = ""
+
+class SemesterWeekOut(BaseModel):
+    id: str
+    course_id: str
+    week_num: int
+    chapter_title: str
+    topics: List[WeekTopicSchema] = []
+    notes: str
+
+    class Config:
+        from_attributes = True
+
+class SaveSemesterPlanRequest(BaseModel):
+    weeks: List[SemesterWeekCreate]
+
 class Course(CourseBase):
     materials: List[Material] = []
     chapters: List[Chapter] = []
@@ -228,6 +285,7 @@ class Course(CourseBase):
     category: Optional[str] = ""
     image: Optional[str] = ""
     user_role: Optional[str] = None
+    syllabus: Optional[CourseSyllabus] = None
 
     class Config:
         from_attributes = True
@@ -453,26 +511,6 @@ class GradingComponentOut(BaseModel):
 
 class SaveGradingRequest(BaseModel):
     components: List[GradingComponentCreate]
-
-class SemesterWeekCreate(BaseModel):
-    week_num: int
-    chapter_title: str = ""
-    topics_json: str = "[]"
-    notes: str = ""
-
-class SemesterWeekOut(BaseModel):
-    id: str
-    course_id: str
-    week_num: int
-    chapter_title: str
-    topics_json: str
-    notes: str
-
-    class Config:
-        from_attributes = True
-
-class SaveSemesterPlanRequest(BaseModel):
-    weeks: List[SemesterWeekCreate]
 
 # Resolve forward references
 TokenResponse.model_rebuild()

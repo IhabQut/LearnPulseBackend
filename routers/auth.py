@@ -33,6 +33,10 @@ def register(request: schemas.RegisterRequest, db: Session = Depends(get_db)):
     # Create user
     logger.info(f"Creating user ID and hashing password")
     user_id = f"{'u' if request.role == 'student' else 'p'}_{uuid.uuid4().hex[:8]}"
+    # 4.5 billion possibilities , the collision risk is low for a prototype
+    # we can fix it by either increase length or by checking db for the id and retry another generation
+         
+
     hashed_pw = hash_password(request.password)
 
     logger.info(f"Inserting into users table")
@@ -91,6 +95,7 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password."
         )
+    
 
     # Generate token
     token = create_access_token(user.id)

@@ -173,3 +173,17 @@ def complete_topic(topic_id: str, user = Depends(security.get_current_user), db:
     ))
     
     return {"message": "Topic completed successfully"}
+
+# ─── Syllabus ────────────────────────────────────────────────
+
+@router.get("/courses/{course_id}/syllabus", response_model=schemas.CourseSyllabus)
+def get_syllabus(course_id: str, db: Session = Depends(get_db)):
+    syllabus = crud.get_syllabus(db, course_id)
+    if not syllabus:
+        raise HTTPException(status_code=404, detail="Syllabus not found")
+    return syllabus
+
+@router.post("/courses/{course_id}/syllabus", response_model=schemas.CourseSyllabus)
+def create_or_update_syllabus(course_id: str, data: schemas.CourseSyllabusCreate, user = Depends(security.get_current_user), db: Session = Depends(get_db)):
+    security.require_course_permission(db, user['id'] if isinstance(user, dict) else user.id, course_id, allowed_roles=['owner', 'instructor'])
+    return crud.save_syllabus(db, course_id, data)
