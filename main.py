@@ -41,11 +41,32 @@ class EnsureCORSHeadersMiddleware(BaseHTTPMiddleware):
     """Add CORS headers to every response so browser never blocks (e.g. on errors)."""
 
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
         origin = request.headers.get("origin")
+
+        # Handle preflight OPTIONS immediately
+        if request.method == "OPTIONS":
+            from starlette.responses import Response
+            resp = Response(status_code=200)
+            if origin and origin in CORS_ORIGINS:
+                resp.headers["Access-Control-Allow-Origin"] = origin
+                resp.headers["Access-Control-Allow-Credentials"] = "true"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            resp.headers["Access-Control-Allow-Headers"] = "*"
+            return resp
+
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logging.error(f"Middleware caught exception: {exc}", exc_info=True)
+            from starlette.responses import JSONResponse
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error.", "error": str(exc)}
+            )
+
         if origin and origin in CORS_ORIGINS:
-            response.headers.setdefault("Access-Control-Allow-Origin", origin)
-            response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
         response.headers.setdefault("Access-Control-Allow-Headers", "*")
         return response
